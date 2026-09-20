@@ -28,7 +28,7 @@ To give students a single, accurate system for viewing their weekly class schedu
 - Retrieval of timetable and room data (GET /timetables/me, GET /rooms, GET /rooms/{id}/schedule)
 - Schedule conflict and over-capacity detection system with preset configuration (POST /conflicts/check)
 - AI-powered suggestion system for alternative available time slots, with a deterministic fallback system
-- Receiving section and enrollment data via the `enrollment.changed` event from the registration system
+- Receiving section and enrollment data via the idempotent `enrollment.changed` event from the registration system (Team 03 Enrollment), accepting duplicated events and event replays
 - Sending `schedule.changed` events to the Notification Hub and Data & Analytics
 
 ### Out of Scope
@@ -81,9 +81,9 @@ To give students a single, accurate system for viewing their weekly class schedu
 - **FR-06:** Staff can delete a meeting.
 - **FR-07:** The system must always check for time overlap and room capacity before saving. If a problem is found, it must block the save and provide a clear reason.
 - **FR-08:** Staff can request a new available time slot suggestion when a conflict occurs.
-- **FR-09:** The system receives section and enrollment data from an external system via the `enrollment.changed` event.
+- **FR-09:** The system receives section and enrollment data from an external system (Team 03 Enrollment) via the `enrollment.changed` event, processing incoming events idempotently to handle duplicate delivery and event replays safely.
 - **FR-10:** The system must send a `schedule.changed` event every time a meeting is created/edited/deleted.
-- **FR-11:** The system will recalculate and re-check for conflicts when it receives enrollment change data.
+- **FR-11:** The system updates student enrollments, recalculates section enrolled counts, and re-checks for room capacity conflicts or student schedule clashes upon receiving enrollment change data.
 
 ## 6. Non-Functional Requirements (NFR)
 
@@ -101,7 +101,10 @@ To give students a single, accurate system for viewing their weekly class schedu
 - **BR-03:** A student's timetable is based only on their registered courses and cannot be edited by the student.
 - **BR-04:** The right to create/edit/delete meeting schedules belongs to staff only.
 - **BR-05:** If the AI time-suggestion system is unavailable, the fallback system (Deterministic Scan) must take over immediately.
-- **BR-06:** A `schedule.changed` event must be sent every time meeting data is successfully chang## 8. Data Model
+- **BR-06:** A `schedule.changed` event must be sent every time meeting data is successfully created, updated, or deleted.
+- **BR-07:** The system must process `enrollment.changed` events idempotently. Receiving duplicate events or replaying past events must not cause duplicate enrollment records or corrupt section enrolled counts.
+
+## 8. Data Model
 
 Uses **Cloudflare D1 (Serverless Relational SQL / SQLite)** at the edge, offering strict relational integrity, foreign keys, ACID compliance, and zero cold starts:
 
@@ -142,14 +145,30 @@ Fast global CDN hosting with automated Git deployments and unlimited bandwidth o
 
 ## 11. System Interfaces (API / Interfaces)
 
+### REST Endpoints
 - **API-01:** GET `/api/timetables/me` — retrieve a student's personal timetable
-- **API-02:** GET `/api/rooms/:id/schedule` — retrieve classroom usage schedule
-- **API-03:** POST `/api/meetings` — create a new meeting (checks for conflicts before saving)
-- **API-04:** PATCH/PUT `/api/meetings/:id` — edit a meeting
-- **API-05:** DELETE `/api/meetings/:id` — delete a meeting
-- **API-06:** POST `/api/conflicts/check` — check for schedule or capacity conflicts
-- **API-07 (Inbound Event):** `enrollment.changed` — receives enrollment change data
-- **API-08 (Outbound Event):** `schedule.changed` — notifies when the schedule has changed
+- **API-02:** GET `/api/rooms` — retrieve list of all rooms with optional filtering (building, min_capacity, status)
+- **API-03:** GET `/api/rooms/:id/schedule` — retrieve classroom usage schedule
+- **API-04:** POST `/api/meetings` — create a new meeting (checks for conflicts before saving)
+- **API-05:** PATCH/PUT `/api/meetings/:id` — edit/update a meeting
+- **API-06:** DELETE `/api/meetings/:id` — delete a meeting
+- **API-07:** POST `/api/conflicts/check` — check for schedule or capacity conflicts (with AI slot suggestions and deterministic fallback)
+
+### Event & Integration Interfaces
+- **API-08 (Inbound Event):** `enrollment.changed` — receives idempotent enrollment change data from Team 03 (Enrollment)
+  - **Payload Schema:**
+    ```json
+    {
+      "event_id": "evt_20260920_001",
+      "event_name": "enrollment.changed",
+      "student_id": "usr_std_001",
+      "section_id": "sec_swe204_01",
+      "action": "enrolled", // "enrolled" | "dropped" | "withdrawn"
+      "timestamp": "2026-09-20T10:30:00Z"
+    }
+    ```
+  - **Consumer Contract:** Idempotent execution (upserting enrollment state and synchronizing section seat count; accepting duplicate delivery and event replays without side effects).
+- **API-09 (Outbound Event):** `schedule.changed` — notifies Notification Hub and Data & Analytics when a room/meeting schedule has changed
 
 ## 12. Security
 
@@ -180,18 +199,26 @@ Fast global CDN hosting with automated Git deployments and unlimited bandwidth o
 
 - **Relational Integrity:** Fully solved by Cloudflare D1's native SQLite schema constraints, `FOREIGN KEY ... ON DELETE CASCADE`, and check constraints (`CHECK(start_time < end_time)`), which was a major limitation in Firestore.
 - **Simultaneous double-booking race conditions:** Mitigated using Cloudflare D1 atomic transactions and strict conflict pre-check queries.
-- **AI Service unavailability:** Mitigated by always having a deterministic fallback system in place.inistic fallback system in place
+- **AI Service unavailability:** Mitigated by always having a deterministic fallback system in place (BR-05).
+- **Duplicate Webhook Delivery & Event Replay:** Mitigated by idempotent database UPSERT (`ON CONFLICT(student_id, section_id) DO UPDATE`) and count aggregation queries.
 
 ## 17. Acceptance Criteria
 
-- [ ] Students can log in and see a timetable matching their registered courses
-- [ ] Students can view classroom schedules without being able to edit the data
-- [ ] Staff can create, edit, and delete meetings
-- [ ] The system correctly blocks duplicate time scheduling in the same room
-- [ ] The system correctly blocks room assignments where capacity is insufficient
-- [ ] A `schedule.changed` event is sent whenever a schedule is successfully modified
-- [ ] The AI time-suggestion system works, and if the AI fails, the fallback system can still suggest correct times
-- [ ] Passes at least 7 core automated test cases
+- [ ] Students can log in and see a personal timetable matching their registered courses
+- [ ] Students and staff can view classroom schedules (room lookup) without unauthorized modification
+- [ ] Staff with `room-planning` role can create, update, and delete meetings
+- [ ] The system correctly blocks duplicate time scheduling in the same room (BR-01, HTTP 409 Conflict)
+- [ ] The system correctly blocks room assignments where capacity is insufficient (BR-02, HTTP 400 Bad Request)
+- [ ] A `schedule.changed` event is sent whenever a schedule is successfully created/updated/deleted
+- [ ] The AI time-suggestion system proposes alternative slots, and the deterministic fallback reliably suggests slots when AI is unavailable
+- [ ] Passes all 7 core automated test cases as specified by the course curriculum:
+  1. **personal schedule** — `GET /timetables/me` accurately aggregates registered sections and detects overlaps
+  2. **room lookup** — `GET /rooms` and `GET /rooms/{id}/schedule` returns correct room metadata and active meeting schedules
+  3. **create** — `POST /meetings` successfully allocates valid section, room, and time
+  4. **update** — `PATCH /meetings/{id}` successfully modifies meeting time/room while enforcing conflict rules
+  5. **time clash** — attempts to double-book a room are rejected with HTTP 409 Conflict
+  6. **capacity clash** — attempts to assign a section exceeding room capacity are rejected with HTTP 400 Bad Request
+  7. **enrollment-event replay** — replaying duplicate `enrollment.changed` events is handled idempotently without count corruption
 - [ ] Users with Student privileges cannot write data to the database under any circumstances
 - [ ] The system is deployed and usable via Cloudflare Pages & Workers (Free Tier)
 

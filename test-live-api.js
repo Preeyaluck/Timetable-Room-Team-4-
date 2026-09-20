@@ -112,7 +112,7 @@ async function testApi() {
   const dataCapacity = await resCapacity.json();
   console.log('10. POST /api/meetings (Capacity exceeded - Expect 400):', resCapacity.status, dataCapacity.error);
 
-  // Test 11: Create Valid Meeting (Expect 201)
+  // Test 11: Create Valid Meeting (Create test - Expect 201)
   const validMeeting = {
     id: 'mtg_valid_test',
     section_id: 'sec_swe204_02',
@@ -130,10 +130,49 @@ async function testApi() {
   const dataValid = await resValid.json();
   console.log('11. POST /api/meetings (Valid creation - Expect 201):', resValid.status, dataValid.message);
 
-  // Test 12: Delete Test Meeting
+  // Test 12: Update Meeting via PATCH (Update test - Expect 200)
+  const resPatch = await fetch(`${BASE_URL}/api/meetings/mtg_valid_test`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ start_time: '14:00', end_time: '16:00' })
+  });
+  const dataPatch = await resPatch.json();
+  console.log('12. PATCH /api/meetings/mtg_valid_test (Update via PATCH - Expect 200):', resPatch.status, dataPatch.message);
+
+  // Test 13: Inbound enrollment.changed Event & Event Replay (Idempotency Test)
+  const eventPayload = {
+    event_id: 'evt_replay_test_001',
+    event_name: 'enrollment.changed',
+    student_id: 'usr_std_001',
+    section_id: 'sec_swe204_02',
+    action: 'enrolled',
+    timestamp: new Date().toISOString()
+  };
+  // Send 1st time
+  const resEvt1 = await fetch(`${BASE_URL}/api/enrollments/event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(eventPayload)
+  });
+  const dataEvt1 = await resEvt1.json();
+  // Send 2nd time (duplicate/replay)
+  const resEvt2 = await fetch(`${BASE_URL}/api/enrollments/event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(eventPayload)
+  });
+  const dataEvt2 = await resEvt2.json();
+  console.log('13. POST /api/enrollments/event (Idempotent Event Replay Test):', {
+    first_send_status: resEvt1.status,
+    replay_send_status: resEvt2.status,
+    is_idempotent: dataEvt2.idempotent,
+    count_after_replay: dataEvt2.current_status?.enrolled_count
+  });
+
+  // Test 14: Delete Test Meeting
   const resDelMtg = await fetch(`${BASE_URL}/api/meetings/mtg_valid_test`, { method: 'DELETE' });
   const dataDelMtg = await resDelMtg.json();
-  console.log('12. DELETE /api/meetings/mtg_valid_test:', resDelMtg.status, dataDelMtg.message);
+  console.log('14. DELETE /api/meetings/mtg_valid_test:', resDelMtg.status, dataDelMtg.message);
 
   console.log('\n==================================================');
   console.log('All Live API Tests Completed Successfully!');

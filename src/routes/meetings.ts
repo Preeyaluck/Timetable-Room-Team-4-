@@ -216,10 +216,10 @@ meetings.post('/', async (c) => {
 });
 
 // 4. PATCH /api/meetings/:id or PUT /api/meetings/:id - Update meeting
-meetings.put('/:id', async (c) => {
+const handleUpdateMeeting = async (c: any) => {
   const db = getDb(c);
   const id = c.req.param('id');
-  const body = await c.req.json<Partial<Meeting>>();
+  const body: Partial<Meeting> = await c.req.json();
 
   const existing = await db.prepare('SELECT * FROM meetings WHERE id = ?').bind(id).first<Meeting>();
   if (!existing) {
@@ -312,7 +312,10 @@ meetings.put('/:id', async (c) => {
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
-});
+};
+
+meetings.put('/:id', handleUpdateMeeting);
+meetings.patch('/:id', handleUpdateMeeting);
 
 // 5. DELETE /api/meetings/:id - Delete meeting
 meetings.delete('/:id', async (c) => {

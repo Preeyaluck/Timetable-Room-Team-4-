@@ -36,7 +36,7 @@ app.get('/', (c) => {
         list: 'GET /api/meetings',
         detail: 'GET /api/meetings/:id',
         create: 'POST /api/meetings',
-        update: 'PUT /api/meetings/:id',
+        update: 'PATCH /api/meetings/:id',
         delete: 'DELETE /api/meetings/:id'
       },
       timetables: {
