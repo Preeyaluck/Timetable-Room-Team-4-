@@ -1,0 +1,259 @@
+import { Course, Enrollment, Meeting, Room, Section, User } from '../types';
+
+export const API_BASE = import.meta.env.VITE_API_URL || 'https://timetable-room-api.6731503021.workers.dev';
+
+export const DAYS: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+export const H0 = 8, H1 = 18, HH = 52;
+
+export const t2m = (s: string): number => {
+  const [a, b] = s.split(':');
+  return +a * 60 + +b;
+};
+
+export const m2t = (m: number): string => {
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+};
+
+export const overlap = (a: { start: string; end: string }, b: { start: string; end: string }): boolean => {
+  return t2m(a.start) < t2m(b.end) && t2m(b.start) < t2m(a.end);
+};
+
+export const timeOpts: string[] = [];
+for (let m = H0 * 60; m <= H1 * 60; m += 30) {
+  timeOpts.push(m2t(m));
+}
+
+// Initial Mock / Seed data as designed by teammate
+// Seed rooms matching user screenshots
+export const INITIAL_ROOMS: Room[] = [
+  {
+    id: 'rm_sc301',
+    name: 'SC301',
+    type: 'ห้องบรรยาย',
+    capacity: 50,
+    building: 'อาคารวิทยาศาสตร์',
+    floor: 'ชั้น 3',
+    features: ['โปรเจกเตอร์', 'Wi-Fi', 'ไมโครโฟน'],
+  },
+  {
+    id: 'rm_sc302',
+    name: 'SC302',
+    type: 'ห้องบรรยาย',
+    capacity: 40,
+    building: 'อาคารวิทยาศาสตร์',
+    floor: 'ชั้น 3',
+    features: ['โปรเจกเตอร์', 'Wi-Fi'],
+  },
+  {
+    id: 'rm_sc303',
+    name: 'SC303',
+    type: 'ห้องปฏิบัติการคอมพิวเตอร์',
+    capacity: 32,
+    building: 'อาคารวิทยาศาสตร์',
+    floor: 'ชั้น 3',
+    features: ['คอมพิวเตอร์ 32 เครื่อง', 'โปรเจกเตอร์', 'Wi-Fi'],
+  },
+  {
+    id: 'rm_sc304',
+    name: 'SC304',
+    type: 'ห้องบรรยาย',
+    capacity: 60,
+    building: 'อาคารวิทยาศาสตร์',
+    floor: 'ชั้น 3',
+    features: ['โปรเจกเตอร์', 'Wi-Fi', 'ระบบเสียงห้องประชุม'],
+  },
+];
+
+export const INITIAL_COURSES: Course[] = [
+  { id: 'c_cs201', code: 'CS201', name: 'โครงสร้างข้อมูล', credits: 3, hue: 250, instructor: 'อ.ธนา วงศ์ดี' },
+  { id: 'c_cs202', code: 'CS202', name: 'ระบบฐานข้อมูล', credits: 3, hue: 215, instructor: 'อ.กมล สมบูรณ์' },
+  { id: 'c_cs203', code: 'CS203', name: 'เครือข่ายคอมพิวเตอร์', credits: 3, hue: 155, instructor: 'อ.ปิยะ ชนะภัย' },
+  { id: 'c_ma201', code: 'MA201', name: 'คณิตศาสตร์ไม่ต่อเนื่อง', credits: 3, hue: 38, instructor: 'อ.วรินทร์ แก้วมณี' },
+  { id: 'c_ge101', code: 'GE101', name: 'ภาษาอังกฤษเพื่อการสื่อสาร', credits: 3, hue: 340, instructor: 'อ.มาลี เจริญผล' },
+  { id: 'c_cs204', code: 'CS204', name: 'การพัฒนาเว็บ', credits: 3, hue: 195, instructor: 'อ.เอกชัย มีสุข' },
+  { id: 'c_cs205', code: 'CS205', name: 'ระบบปฏิบัติการ', credits: 3, hue: 275, instructor: 'ดร.สมเกียรติ สว่างวงศ์' },
+];
+
+export const INITIAL_SECTIONS: Section[] = [
+  { id: 'sec_cs201_01', courseId: 'c_cs201', no: '01', capacity: 50, base: 37 },
+  { id: 'sec_cs201_02', courseId: 'c_cs201', no: '02', capacity: 60, base: 42 },
+  { id: 'sec_cs202_01', courseId: 'c_cs202', no: '01', capacity: 40, base: 35 },
+  { id: 'sec_cs203_01', courseId: 'c_cs203', no: '01', capacity: 32, base: 29 },
+  { id: 'sec_cs203_02', courseId: 'c_cs203', no: '02', capacity: 32, base: 30 },
+  { id: 'sec_ma201_01', courseId: 'c_ma201', no: '01', capacity: 60, base: 51 },
+  { id: 'sec_ge101_03', courseId: 'c_ge101', no: '03', capacity: 60, base: 44 },
+  { id: 'sec_cs204_01', courseId: 'c_cs204', no: '01', capacity: 32, base: 28 },
+  { id: 'sec_cs204_02', courseId: 'c_cs204', no: '02', capacity: 32, base: 26 },
+  { id: 'sec_cs205_01', courseId: 'c_cs205', no: '01', capacity: 32, base: 32 },
+];
+
+export const DEMO_USERS: Record<string, User> = {
+  '69010042': { id: '69010042', name: 'ณัฐวุฒิ ใจดี', role: 'student', department: 'วิทยาการคอมพิวเตอร์', initials: 'ณว' },
+  '6731503021': { id: '6731503021', name: 'Miss Preeyaluk Moolpom', role: 'student', department: 'Software Engineering', initials: 'PM' },
+  'usr_stf_001': { id: 'usr_stf_001', name: 'พิมพ์ชนก สุขใจ', role: 'staff', department: 'เจ้าหน้าที่จัดตาราง', initials: 'พส' },
+  'staff': { id: 'usr_stf_001', name: 'พิมพ์ชนก สุขใจ', role: 'staff', department: 'เจ้าหน้าที่จัดตาราง', initials: 'พส' },
+};
+
+export const INITIAL_STUDENT: User = DEMO_USERS['69010042'];
+export const INITIAL_STAFF: User = DEMO_USERS['usr_stf_001'];
+
+export const INITIAL_ENROLLMENTS: Enrollment[] = [
+  // Student 69010042 (ณัฐวุฒิ ใจดี) enrollments matching Screenshot 1 (5 courses, 15 credits, 16 hours)
+  { student: '69010042', section: 'sec_cs201_01', status: 'enrolled' },
+  { student: '69010042', section: 'sec_cs202_01', status: 'enrolled' },
+  { student: '69010042', section: 'sec_cs203_01', status: 'enrolled' },
+  { student: '69010042', section: 'sec_ma201_01', status: 'enrolled' },
+  { student: '69010042', section: 'sec_ge101_03', status: 'enrolled' },
+
+  // Also enable 6731503021
+  { student: '6731503021', section: 'sec_cs201_01', status: 'enrolled' },
+  { student: '6731503021', section: 'sec_cs202_01', status: 'enrolled' },
+  { student: '6731503021', section: 'sec_cs203_01', status: 'enrolled' },
+  { student: '6731503021', section: 'sec_ma201_01', status: 'enrolled' },
+  { student: '6731503021', section: 'sec_ge101_03', status: 'enrolled' },
+];
+
+export const INITIAL_MEETINGS: Meeting[] = [
+  // Student Schedule (Matches Screenshot 1):
+  // 1. CS201 sec 01: Monday 09:00-11:00 @ SC301 & Thursday 13:00-15:00 @ SC301
+  { id: 'mtg_01', sectionId: 'sec_cs201_01', roomId: 'rm_sc301', day: 'Mon', start: '09:00', end: '11:00' },
+  { id: 'mtg_02', sectionId: 'sec_cs201_01', roomId: 'rm_sc301', day: 'Thu', start: '13:00', end: '15:00' },
+
+  // 2. MA201 sec 01: Monday 13:00-15:00 @ SC304
+  { id: 'mtg_03', sectionId: 'sec_ma201_01', roomId: 'rm_sc304', day: 'Mon', start: '13:00', end: '15:00' },
+
+  // 3. CS202 sec 01: Tuesday 09:00-11:00 @ SC302 & Friday 13:00-15:00 @ SC302
+  { id: 'mtg_04', sectionId: 'sec_cs202_01', roomId: 'rm_sc302', day: 'Tue', start: '09:00', end: '11:00' },
+  { id: 'mtg_05', sectionId: 'sec_cs202_01', roomId: 'rm_sc302', day: 'Fri', start: '13:00', end: '15:00' },
+
+  // 4. CS203 sec 01: Wednesday 09:00-12:00 @ SC303
+  { id: 'mtg_06', sectionId: 'sec_cs203_01', roomId: 'rm_sc303', day: 'Wed', start: '09:00', end: '12:00' },
+
+  // 5. GE101 sec 03: Thursday 09:00-12:00 @ SC304
+  { id: 'mtg_07', sectionId: 'sec_ge101_03', roomId: 'rm_sc304', day: 'Thu', start: '09:00', end: '12:00' },
+
+  // Additional Room Schedule for SC303 (Matches Screenshot 2):
+  // - Monday 09:00-12:00: CS203 sec 02 @ SC303 (30/32)
+  { id: 'mtg_08', sectionId: 'sec_cs203_02', roomId: 'rm_sc303', day: 'Mon', start: '09:00', end: '12:00' },
+
+  // - Tuesday 13:00-15:00: CS204 sec 01 @ SC303 (28/32)
+  { id: 'mtg_09', sectionId: 'sec_cs204_01', roomId: 'rm_sc303', day: 'Tue', start: '13:00', end: '15:00' },
+
+  // - Thursday 13:00-16:00: CS205 sec 01 @ SC303 (32/32)
+  { id: 'mtg_10', sectionId: 'sec_cs205_01', roomId: 'rm_sc303', day: 'Thu', start: '13:00', end: '16:00' },
+
+  // - Friday 09:00-11:00: CS204 sec 02 @ SC303 (26/32)
+  { id: 'mtg_11', sectionId: 'sec_cs204_02', roomId: 'rm_sc303', day: 'Fri', start: '09:00', end: '11:00' },
+
+  // Existing published schedule for CS201 sec 02 (Matches Screenshot 3):
+  // Wednesday 13:00-15:00 @ SC304 (60 seats, 42 students)
+  { id: 'mtg_12', sectionId: 'sec_cs201_02', roomId: 'rm_sc304', day: 'Wed', start: '13:00', end: '15:00' },
+];
+
+export const color = (c: Course) => ({
+  bg: `hsl(${c.hue} 85% var(--bgl))`,
+  bd: `hsl(${c.hue} 60% var(--bdl))`,
+  tx: `hsl(${c.hue} 55% var(--txl))`,
+});
+
+// ---------------------------------------------------------------------------
+// Live API Client Layer (Connected to Cloudflare Workers + D1 Backend)
+// ---------------------------------------------------------------------------
+export async function apiFetchRooms(): Promise<Room[]> {
+  try {
+    const res = await fetch(`${API_BASE}/api/rooms`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+      return json.data.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        type: r.room_type || r.type || 'ห้องบรรยาย',
+        capacity: Number(r.capacity) || 40,
+        building: r.building || 'อาคารวิทยาศาสตร์',
+        floor: r.floor || 'ชั้น 3',
+        features: Array.isArray(r.features)
+          ? r.features
+          : typeof r.features === 'string'
+          ? JSON.parse(r.features)
+          : ['โปรเจกเตอร์', 'Wi-Fi'],
+      }));
+    }
+  } catch (err) {
+    console.info('apiFetchRooms fallback to initial seed:', err);
+  }
+  return INITIAL_ROOMS;
+}
+
+export async function apiFetchMeetings(): Promise<Meeting[]> {
+  try {
+    const res = await fetch(`${API_BASE}/api/meetings`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+      const dayMap: Record<string, 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'> = {
+        Monday: 'Mon',
+        Tuesday: 'Tue',
+        Wednesday: 'Wed',
+        Thursday: 'Thu',
+        Friday: 'Fri',
+        Mon: 'Mon',
+        Tue: 'Tue',
+        Wed: 'Wed',
+        Thu: 'Thu',
+        Fri: 'Fri',
+      };
+      return json.data.map((m: any) => ({
+        id: m.id,
+        sectionId: m.section_id || m.sectionId,
+        roomId: m.room_id || m.roomId,
+        day: dayMap[m.day_of_week] || 'Mon',
+        start: m.start_time || m.start,
+        end: m.end_time || m.end,
+      }));
+    }
+  } catch (err) {
+    console.info('apiFetchMeetings fallback to initial seed:', err);
+  }
+  return INITIAL_MEETINGS;
+}
+
+export async function apiCheckConflict(params: {
+  section_id: string;
+  room_id: string;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+}) {
+  try {
+    const res = await fetch(`${API_BASE}/api/conflicts/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('apiCheckConflict network error:', err);
+    return null;
+  }
+}
+
+export async function apiAiSuggest(params: {
+  course_id?: string;
+  section_id?: string;
+  room_id?: string;
+  preferred_day?: string;
+  notes?: string;
+}) {
+  try {
+    const res = await fetch(`${API_BASE}/api/conflicts/ai-suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return await res.json();
+  } catch (err) {
+    console.warn('apiAiSuggest network error:', err);
+    return null;
+  }
+}

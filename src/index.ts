@@ -14,8 +14,16 @@ const app = new Hono<{ Bindings: Bindings }>();
 // Enable CORS for all origins
 app.use('*', cors());
 
-// Root Endpoint - System Documentation and Overview
-app.get('/', (c) => {
+// Serve frontend assets or system info on root
+app.get('/', async (c) => {
+  if (c.env.ASSETS) {
+    return c.env.ASSETS.fetch(c.req.raw);
+  }
+  return c.redirect('/api');
+});
+
+// API Documentation and System Overview Endpoint
+app.get('/api', (c) => {
   return c.json({
     project: 'Identity & Academic Core - Timetable & Room',
     team: 'Team 4',
@@ -43,7 +51,8 @@ app.get('/', (c) => {
         student_timetable: 'GET /api/timetables/me?student_id=usr_std_001'
       },
       conflicts: {
-        check: 'POST /api/conflicts/check'
+        check: 'POST /api/conflicts/check',
+        ai_suggest: 'POST /api/conflicts/ai-suggest'
       },
       sections_and_courses: {
         list_sections: 'GET /api/sections',
@@ -92,8 +101,11 @@ app.route('/api/conflicts', conflicts);
 app.route('/api/users', users);
 app.route('/api/enrollments', enrollments);
 
-// 404 Handler
-app.notFound((c) => {
+// 404 Handler - Fallback to ASSETS for SPA client routing if not an /api route
+app.notFound(async (c) => {
+  if (c.env.ASSETS && !c.req.path.startsWith('/api')) {
+    return c.env.ASSETS.fetch(c.req.raw);
+  }
   return c.json({
     success: false,
     error: 'Endpoint Not Found',

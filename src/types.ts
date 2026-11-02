@@ -11,9 +11,15 @@ export interface D1Database {
   exec(query: string): Promise<any>;
 }
 
+export interface WorkersAi {
+  run(model: string, inputs: Record<string, any>): Promise<any>;
+}
+
 export type Bindings = {
   DB: D1Database;
   timetable_room_db?: D1Database;
+  AI?: WorkersAi;
+  ASSETS?: any;
 };
 
 export interface User {
