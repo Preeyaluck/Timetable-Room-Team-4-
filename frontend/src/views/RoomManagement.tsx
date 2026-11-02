@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Course, Meeting, Room, RoomRequest, Section } from '../types';
+import { Course, Day, Meeting, Room, RoomRequest, Section } from '../types';
 import { overlap } from '../services/api';
 
 interface RoomManagementProps {
@@ -28,9 +28,9 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
   onNewMeeting,
   onDeleteMeeting,
   onSaveMeeting,
-  roomRequests = [],
-  onApproveRequest,
-  onRejectRequest,
+  roomRequests: _roomRequests = [],
+  onApproveRequest: _onApproveRequest,
+  onRejectRequest: _onRejectRequest,
 }) => {
   // Active selected section for editing (Default to CS201 sec 02 matching Screenshot 3)
   const [selectedSecId, setSelectedSecId] = useState<string>(() => {
@@ -44,7 +44,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
   const [formCourseId, setFormCourseId] = useState<string>('c_cs201');
   const [formSecNo, setFormSecNo] = useState<string>('02');
   const [formRoomId, setFormRoomId] = useState<string>('rm_sc303'); // intentionally set to SC303 initially to showcase conflict
-  const [formDay, setFormDay] = useState<'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'>('Mon');
+  const [formDay, setFormDay] = useState<Day>('Mon');
   const [formStart, setFormStart] = useState<string>('09:00');
   const [formEnd, setFormEnd] = useState<string>('11:00');
   const [repeatWeekly, setRepeatWeekly] = useState<boolean>(true);
@@ -214,31 +214,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
         </div>
       </div>
 
-      {/* Pending Student Room Requests Banner (if any) */}
-      {roomRequests.filter((r) => r.status === 'pending').length > 0 && (
-        <div className="pending-requests-card">
-          <div className="req-header-row">
-            <span className="req-title">📨 คำขอใช้ห้องจากนักศึกษาที่รอดำเนินการ</span>
-            <span className="req-count-badge">
-              {roomRequests.filter((r) => r.status === 'pending').length} รายการ
-            </span>
-          </div>
-          <div className="req-items-list">
-            {roomRequests.filter((r) => r.status === 'pending').map((req) => (
-              <div key={req.id} className="req-item-row">
-                <div>
-                  <b>{req.studentName}</b> ({req.studentId}) — ขอใช้ห้อง <b>{getRoom(req.roomId)?.name}</b> ({req.day} {req.start}-{req.end})
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>วัตถุประสงค์: {req.purpose} · ผู้เข้าร่วม {req.attendees} คน</div>
-                </div>
-                <div className="req-actions">
-                  <button className="btn-approve" onClick={() => onApproveRequest && onApproveRequest(req.id)}>อนุมัติ</button>
-                  <button className="btn-reject" onClick={() => onRejectRequest && onRejectRequest(req.id)}>ปฏิเสธ</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* 3-Column Studio Interface */}
       <div className="management-studio-grid">

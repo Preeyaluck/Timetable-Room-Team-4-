@@ -25,11 +25,13 @@ export interface Section {
   base: number;
 }
 
+export type Day = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+
 export interface Meeting {
   id: string;
   sectionId: string;
   roomId: string;
-  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+  day: Day;
   start: string;
   end: string;
 }
@@ -58,7 +60,7 @@ export interface EventLog {
 
 export interface Suggestion {
   roomId: string;
-  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+  day: Day;
   start: string;
   end: string;
   score: number;
@@ -76,7 +78,7 @@ export interface RoomRequest {
   studentId: string;
   studentName: string;
   roomId: string;
-  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+  day: Day;
   start: string;
   end: string;
   purpose: string;
@@ -86,4 +88,3 @@ export interface RoomRequest {
   department?: string;
   rejectReason?: string;
 }
-

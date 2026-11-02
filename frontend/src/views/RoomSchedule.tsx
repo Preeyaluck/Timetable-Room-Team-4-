@@ -31,7 +31,7 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
   const [fQ, setFQ] = useState('');
   const [fBuilding, setFBuilding] = useState('อาคารวิทยาศาสตร์');
   const [fCap, setFCap] = useState('all');
-  const [fTimeSlot, setFTimeSlot] = useState('mon-09-11');
+  const [fTimeSlot, setFTimeSlot] = useState('all');
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>(() => {
     return rooms.find((r) => r.name === 'SC303')?.id || rooms[0]?.id || '';
@@ -92,10 +92,36 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
     '13:00', '14:00', '15:00', '16:00', '17:00', '18:00',
   ];
 
-  // Check if a room is occupied on Monday 09:00-11:00
+  // Check if a room is occupied on selected day/timeslot (covering Mon-Sun and all slots)
   const isRoomOccupied = (roomId: string) => {
+    if (fTimeSlot === 'all') return false;
+
+    const parts = fTimeSlot.split('-');
+    const dayPrefix = parts[0];
+    const dayMap: Record<string, string> = {
+      mon: 'Mon',
+      tue: 'Tue',
+      wed: 'Wed',
+      thu: 'Thu',
+      fri: 'Fri',
+      sat: 'Sat',
+      sun: 'Sun',
+    };
+    const targetDay = dayMap[dayPrefix] || 'Mon';
+
+    if (parts[1] === 'all') {
+      return meetings.some((m) => m.roomId === roomId && m.day === targetDay);
+    }
+
+    const startStr = parts[1] ? `${parts[1]}:00` : '09:00';
+    const endStr = parts[2] ? `${parts[2]}:00` : '11:00';
+
     return meetings.some(
-      (m) => m.roomId === roomId && m.day === 'Mon' && t2m(m.start) < t2m('11:00') && t2m(m.end) > t2m('09:00')
+      (m) =>
+        m.roomId === roomId &&
+        m.day === targetDay &&
+        t2m(m.start) < t2m(endStr) &&
+        t2m(m.end) > t2m(startStr)
     );
   };
 
@@ -246,12 +272,46 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
           <span className="select-caret">▾</span>
         </div>
 
-        {/* Timeslot Select */}
+        {/* Timeslot Select covering จันทร์ - อาทิตย์ และทุกช่วงเวลา */}
         <div className="filter-select-box">
           <span className="select-icon">📅</span>
           <select value={fTimeSlot} onChange={(e) => setFTimeSlot(e.target.value)}>
-            <option value="mon-09-11">จันทร์ 16 พ.ย. · 09:00-11:00</option>
             <option value="all">ทุกช่วงเวลา</option>
+            <optgroup label="วันจันทร์">
+              <option value="mon-all">วันจันทร์ · ทุกช่วงเวลา</option>
+              <option value="mon-09-11">วันจันทร์ · 09:00–11:00 น.</option>
+              <option value="mon-13-15">วันจันทร์ · 13:00–15:00 น.</option>
+            </optgroup>
+            <optgroup label="วันอังคาร">
+              <option value="tue-all">วันอังคาร · ทุกช่วงเวลา</option>
+              <option value="tue-09-11">วันอังคาร · 09:00–11:00 น.</option>
+              <option value="tue-13-15">วันอังคาร · 13:00–15:00 น.</option>
+            </optgroup>
+            <optgroup label="วันพุธ">
+              <option value="wed-all">วันพุธ · ทุกช่วงเวลา</option>
+              <option value="wed-09-12">วันพุธ · 09:00–12:00 น.</option>
+              <option value="wed-13-15">วันพุธ · 13:00–15:00 น.</option>
+            </optgroup>
+            <optgroup label="วันพฤหัสบดี">
+              <option value="thu-all">วันพฤหัสบดี · ทุกช่วงเวลา</option>
+              <option value="thu-09-12">วันพฤหัสบดี · 09:00–12:00 น.</option>
+              <option value="thu-13-16">วันพฤหัสบดี · 13:00–16:00 น.</option>
+            </optgroup>
+            <optgroup label="วันศุกร์">
+              <option value="fri-all">วันศุกร์ · ทุกช่วงเวลา</option>
+              <option value="fri-09-11">วันศุกร์ · 09:00–11:00 น.</option>
+              <option value="fri-13-15">วันศุกร์ · 13:00–15:00 น.</option>
+            </optgroup>
+            <optgroup label="วันเสาร์">
+              <option value="sat-all">วันเสาร์ · ทุกช่วงเวลา</option>
+              <option value="sat-09-12">วันเสาร์ · 09:00–12:00 น.</option>
+              <option value="sat-13-16">วันเสาร์ · 13:00–16:00 น.</option>
+            </optgroup>
+            <optgroup label="วันอาทิตย์">
+              <option value="sun-all">วันอาทิตย์ · ทุกช่วงเวลา</option>
+              <option value="sun-09-12">วันอาทิตย์ · 09:00–12:00 น.</option>
+              <option value="sun-13-16">วันอาทิตย์ · 13:00–16:00 น.</option>
+            </optgroup>
           </select>
           <span className="select-caret">▾</span>
         </div>

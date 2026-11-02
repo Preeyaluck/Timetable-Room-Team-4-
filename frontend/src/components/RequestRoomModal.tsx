@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Meeting, Room, User } from '../types';
-import { DAYS, timeOpts, t2m } from '../services/api';
+import { Day, Meeting, Room, User } from '../types';
+import { timeOpts, t2m } from '../services/api';
 
 interface RequestRoomModalProps {
   currentUser: User;
@@ -11,7 +11,7 @@ interface RequestRoomModalProps {
     studentId: string;
     studentName: string;
     roomId: string;
-    day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+    day: Day;
     start: string;
     end: string;
     purpose: string;
@@ -29,21 +29,37 @@ export const RequestRoomModal: React.FC<RequestRoomModalProps> = ({
   onClose,
 }) => {
   const [roomId, setRoomId] = useState<string>(initialRoomId || rooms[0]?.id || '');
-  const [day, setDay] = useState<'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'>('Mon');
-  const [start, setStart] = useState<string>('13:00');
-  const [end, setEnd] = useState<string>('15:00');
+  const [day, setDay] = useState<Day>('Mon');
+  const [start, setStart] = useState<string>('10:00');
+  const [end, setEnd] = useState<string>('12:00');
   const [purpose, setPurpose] = useState<string>('');
   const [attendees, setAttendees] = useState<number>(15);
 
   const selectedRoom = rooms.find((r) => r.id === roomId) || rooms[0];
 
+  const daysOptions: { key: Day; label: string }[] = [
+    { key: 'Mon', label: 'วันจันทร์ (Monday)' },
+    { key: 'Tue', label: 'วันอังคาร (Tuesday)' },
+    { key: 'Wed', label: 'วันพุธ (Wednesday)' },
+    { key: 'Thu', label: 'วันพฤหัสบดี (Thursday)' },
+    { key: 'Fri', label: 'วันศุกร์ (Friday)' },
+  ];
+
+  const dayThaiLabels: Record<Day, string> = {
+    Mon: 'จันทร์',
+    Tue: 'อังคาร',
+    Wed: 'พุธ',
+    Thu: 'พฤหัสบดี',
+    Fri: 'ศุกร์',
+  };
+
   // Validation
   const errors: string[] = [];
   if (t2m(end) <= t2m(start)) {
-    errors.push('End time must be after start time.');
+    errors.push('เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น');
   }
 
-  // Check if room is booked by class
+  // Check if room is booked by an existing class
   const conflictingMeeting = meetings.find(
     (m) =>
       m.roomId === roomId &&
@@ -54,13 +70,13 @@ export const RequestRoomModal: React.FC<RequestRoomModalProps> = ({
 
   if (conflictingMeeting) {
     errors.push(
-      `Room is already booked on ${day} (${conflictingMeeting.start}–${conflictingMeeting.end}). Please pick another time or room.`
+      `ห้อง ${selectedRoom?.name} มีการใช้งานอยู่แล้วในวัน${dayThaiLabels[day]} ช่วงเวลา ${conflictingMeeting.start} – ${conflictingMeeting.end} น. กรุณาเลือกช่วงเวลาอื่นหรือห้องอื่น`
     );
   }
 
   if (selectedRoom && attendees > selectedRoom.capacity) {
     errors.push(
-      `Attendees (${attendees}) exceed ${selectedRoom.name} capacity (${selectedRoom.capacity} seats).`
+      `จำนวนผู้เข้าร่วม (${attendees} คน) เกินความจุของห้อง ${selectedRoom.name} (${selectedRoom.capacity} ที่นั่ง)`
     );
   }
 
@@ -68,7 +84,7 @@ export const RequestRoomModal: React.FC<RequestRoomModalProps> = ({
     e.preventDefault();
     if (errors.length > 0) return;
     if (!purpose.trim()) {
-      alert('Please state the purpose for using this classroom.');
+      alert('กรุณาระบุวัตถุประสงค์ในการขอใช้ห้องเรียน');
       return;
     }
 
@@ -85,111 +101,171 @@ export const RequestRoomModal: React.FC<RequestRoomModalProps> = ({
   };
 
   return (
-    <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
-        <header>
-          <div>
-            <h2>Request Room Booking</h2>
-            <small style={{ color: 'var(--muted)' }}>
-              Submit room usage request to Staff Room Planner
-            </small>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-dialog request-room-modal-card" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="modal-header request-modal-header">
+          <div className="request-header-left">
+            <div className="request-icon-badge">📨</div>
+            <div>
+              <h3 className="modal-title">ยื่นคำร้องขอใช้ห้องเรียน</h3>
+              <p className="modal-subtitle">
+                ส่งคำร้องไปยังเจ้าหน้าที่จัดตารางเรียนเพื่อพิจารณาอนุมัติ
+              </p>
+            </div>
           </div>
-          <button className="btn sm" onClick={onClose} type="button">
+          <button className="modal-close-btn" onClick={onClose} type="button" id="btn-close-request-modal">
             ✕
           </button>
-        </header>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="body">
-            <div className="form2">
-              <label className="field">
-                Select Classroom
-                <select value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+        {/* Requester Profile Strip */}
+        <div className="requester-info-strip">
+          <div className="requester-avatar">
+            {currentUser.initials || currentUser.name.charAt(0)}
+          </div>
+          <div className="requester-details">
+            <span className="requester-name">{currentUser.name}</span>
+            <span className="requester-meta">
+              รหัสนักศึกษา: <b>{currentUser.id}</b> · สาขาวิชา: {currentUser.department || 'วิทยาการคอมพิวเตอร์'}
+            </span>
+          </div>
+          <span className="requester-term-tag">ภาคต้น / 2569</span>
+        </div>
+
+        {/* Modal Form */}
+        <form onSubmit={handleSubmit} className="request-modal-form">
+          <div className="request-form-body">
+            {/* Row 1: Classroom and Day */}
+            <div className="form-two-cols">
+              <div className="form-field-group">
+                <label className="field-label">
+                  ห้องเรียนที่ต้องการขอใช้ <span className="req-star">*</span>
+                </label>
+                <select
+                  className="modern-input-select"
+                  value={roomId}
+                  onChange={(e) => setRoomId(e.target.value)}
+                  id="select-request-room"
+                >
                   {rooms.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.name} · {r.capacity} seats ({r.building})
+                      {r.name} · {r.capacity} ที่นั่ง ({r.building} {r.floor || 'ชั้น 3'})
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
 
-              <label className="field">
-                Day of Week
+              <div className="form-field-group">
+                <label className="field-label">
+                  วันที่ต้องการใช้งาน <span className="req-star">*</span>
+                </label>
                 <select
+                  className="modern-input-select"
                   value={day}
-                  onChange={(e) => setDay(e.target.value as any)}
+                  onChange={(e) => setDay(e.target.value as Day)}
+                  id="select-request-day"
                 >
-                  {DAYS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
+                  {daysOptions.map((d) => (
+                    <option key={d.key} value={d.key}>
+                      {d.label}
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
             </div>
 
-            <div className="form2">
-              <label className="field">
-                Start Time
-                <select value={start} onChange={(e) => setStart(e.target.value)}>
+            {/* Row 2: Time Start and End */}
+            <div className="form-two-cols">
+              <div className="form-field-group">
+                <label className="field-label">
+                  เวลาเริ่มต้น <span className="req-star">*</span>
+                </label>
+                <select
+                  className="modern-input-select"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                  id="select-request-start"
+                >
                   {timeOpts.slice(0, -1).map((t) => (
                     <option key={t} value={t}>
-                      {t}
+                      {t} น.
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
 
-              <label className="field">
-                End Time
-                <select value={end} onChange={(e) => setEnd(e.target.value)}>
+              <div className="form-field-group">
+                <label className="field-label">
+                  เวลาสิ้นสุด <span className="req-star">*</span>
+                </label>
+                <select
+                  className="modern-input-select"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                  id="select-request-end"
+                >
                   {timeOpts.slice(1).map((t) => (
                     <option key={t} value={t}>
-                      {t}
+                      {t} น.
                     </option>
                   ))}
                 </select>
-              </label>
+              </div>
             </div>
 
-            <label className="field">
-              Purpose / Activity Name
+            {/* Row 3: Purpose */}
+            <div className="form-field-group">
+              <label className="field-label">
+                วัตถุประสงค์การขอใช้ห้อง <span className="req-star">*</span>
+              </label>
               <input
                 type="text"
-                placeholder="e.g. SWE204 Group Project Discussion, Tutoring Session"
+                className="modern-input-text"
+                placeholder="เช่น ติวสอบกลางภาควิชา CS201, สัมมนาและนำเสนอโครงงานกลุ่มย่อย"
                 value={purpose}
                 onChange={(e) => setPurpose(e.target.value)}
                 required
+                id="input-request-purpose"
               />
-            </label>
+            </div>
 
-            <div className="form2">
-              <label className="field">
-                Estimated Attendees
+            {/* Row 4: Attendees and Room Capacity Card */}
+            <div className="form-two-cols align-center">
+              <div className="form-field-group">
+                <label className="field-label">
+                  จำนวนผู้เข้าร่วม (คน) <span className="req-star">*</span>
+                </label>
                 <input
                   type="number"
+                  className="modern-input-text"
                   min="1"
                   max={selectedRoom ? selectedRoom.capacity : 100}
                   value={attendees}
                   onChange={(e) => setAttendees(Number(e.target.value))}
                   required
+                  id="input-request-attendees"
                 />
-              </label>
+              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <span className="pill brand" style={{ width: 'fit-content', marginTop: '16px' }}>
-                  Requester: {currentUser.name} ({currentUser.id})
-                </span>
+              <div className="room-capacity-summary-card">
+                <div className="cap-summary-label">ความจุห้อง {selectedRoom?.name}</div>
+                <div className="cap-summary-val">
+                  <span className="cap-highlight">{selectedRoom?.capacity || 40}</span> ที่นั่ง
+                  <span className="cap-sub">
+                    ({selectedRoom?.type || 'ห้องบรรยาย'} · {selectedRoom?.building})
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Diagnostics */}
+            {/* Live Availability Status Banner */}
             {errors.length > 0 ? (
-              <div className="alert bad" style={{ margin: 0 }}>
-                <div className="ico">!</div>
-                <div>
-                  <b>Cannot request this slot:</b>
-                  <ul>
+              <div className="slot-status-banner error">
+                <div className="status-banner-icon">⚠️</div>
+                <div className="status-banner-text">
+                  <b>ไม่สามารถยื่นคำร้องในช่วงเวลานี้ได้:</b>
+                  <ul className="status-error-list">
                     {errors.map((err, i) => (
                       <li key={i}>{err}</li>
                     ))}
@@ -197,32 +273,38 @@ export const RequestRoomModal: React.FC<RequestRoomModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="alert ok" style={{ margin: 0 }}>
-                <div className="ico">✓</div>
-                <div>
-                  <b>Slot is available!</b> {selectedRoom?.name} is free on {day} ({start}–{end}).
+              <div className="slot-status-banner success">
+                <div className="status-banner-icon">✓</div>
+                <div className="status-banner-text">
+                  <b>ห้องว่าง สามารถยื่นคำร้องได้!</b>
+                  <div>
+                    ห้อง {selectedRoom?.name} ว่างสมบูรณ์ในวัน{dayThaiLabels[day]} ช่วงเวลา {start} – {end} น.
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          <footer>
-            <small style={{ color: 'var(--muted)', alignSelf: 'center' }}>
-              Staff will review and approve your request.
-            </small>
-            <div className="row">
-              <button className="btn" type="button" onClick={onClose}>
-                Cancel
+          {/* Footer Actions */}
+          <div className="modal-footer request-modal-footer">
+            <span className="footer-notice-text">
+              🔒 คำร้องจะถูกส่งไปยังระบบการแจ้งเตือนของเจ้าหน้าที่ทันที
+            </span>
+            <div className="footer-buttons-wrap">
+              <button className="btn-modal-cancel" type="button" onClick={onClose} id="btn-cancel-request">
+                ยกเลิก
               </button>
               <button
-                className="btn primary"
+                className="btn-modal-submit"
                 type="submit"
                 disabled={errors.length > 0}
+                id="btn-confirm-submit-request"
               >
-                Send Request to Staff →
+                <span>📨 ส่งคำร้องขอใช้ห้อง</span>
+                <span className="arrow-sym">→</span>
               </button>
             </div>
-          </footer>
+          </div>
         </form>
       </div>
     </div>
