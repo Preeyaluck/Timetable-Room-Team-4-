@@ -62,7 +62,13 @@ export const Topbar: React.FC<TopbarProps> = ({
           </button>
         )}
 
-        <span className="topbar-date">จันทร์ 16 พ.ย. 2569</span>
+        {(() => {
+          const thaiDays = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+          const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+          const now = new Date();
+          const dateStr = `${thaiDays[now.getDay()]} ${now.getDate()} ${thaiMonths[now.getMonth()]} ${now.getFullYear() + 543}`;
+          return <span className="topbar-date">{dateStr}</span>;
+        })()}
 
         {activeView === 'manage' && isStaff ? (
           <div className="topbar-role-badge">

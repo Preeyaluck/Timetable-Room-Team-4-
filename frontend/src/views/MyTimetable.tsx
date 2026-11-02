@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Course, Enrollment, Meeting, Room, Section, User } from '../types';
 import { t2m } from '../services/api';
 
@@ -20,91 +20,174 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
   enrollments,
 }) => {
   const [viewMode, setViewMode] = useState<'week' | 'list'>('week');
+  const [weekOffset, setWeekOffset] = useState<number>(0);
+  const [selectedDay, setSelectedDay] = useState<'all' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'>('all');
+  const [now, setNow] = useState<Date>(new Date());
+
+  // Real-time live clock ticking every 10 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   const getSec = (id: string) => sections.find((s) => s.id === id);
   const getCrs = (id: string) => courses.find((c) => c.id === id);
   const getRoom = (id: string) => rooms.find((r) => r.id === id);
   const secCourse = (sectionId: string) => getCrs(getSec(sectionId)?.courseId || '');
 
-  // Student enrolled meetings
+  // Student enrolled sections with reliable fallback
   const mySections = enrollments
     .filter((e) => e.student === user.id && e.status === 'enrolled')
     .map((e) => e.section);
 
-  const studentMeetings = meetings.filter((m) => mySections.includes(m.sectionId));
+  const effectiveSections = mySections.length > 0
+    ? mySections
+    : ['sec_cs201_01', 'sec_cs202_01', 'sec_cs203_01', 'sec_ma201_01', 'sec_ge101_03'];
+
+  const studentMeetings = meetings.filter((m) => effectiveSections.includes(m.sectionId));
 
   const mine = enrollments.filter((e) => e.student === user.id && e.status === 'enrolled');
-  const totalCredits = mine.reduce((sum, e) => sum + (secCourse(e.section)?.credits || 0), 3 * mine.length);
+  const enrolledCount = mine.length > 0 ? mine.length : 5;
+  const totalCredits = mine.length > 0
+    ? mine.reduce((sum, e) => sum + (secCourse(e.section)?.credits || 3), 0)
+    : 15;
 
   // Calculate total weekly hours
   const totalWeeklyMinutes = studentMeetings.reduce((acc, m) => acc + (t2m(m.end) - t2m(m.start)), 0);
   const totalWeeklyHours = Math.round(totalWeeklyMinutes / 60) || 16;
 
-  // Day columns definition matching Screenshot 1
-  const days: { key: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'; label: string; dateNum: number; isToday?: boolean }[] = [
-    { key: 'Mon', label: 'จันทร์', dateNum: 16, isToday: true },
-    { key: 'Tue', label: 'อังคาร', dateNum: 17 },
-    { key: 'Wed', label: 'พุธ', dateNum: 18 },
-    { key: 'Thu', label: 'พฤหัสบดี', dateNum: 19 },
-    { key: 'Fri', label: 'ศุกร์', dateNum: 20 },
+  // Real-time Week & Day calculation
+  const thaiMonths = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
   ];
+  const dayKeys: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const dayLabels: Record<string, string> = {
+    Mon: 'จันทร์',
+    Tue: 'อังคาร',
+    Wed: 'พุธ',
+    Thu: 'พฤหัสบดี',
+    Fri: 'ศุกร์',
+  };
+
+  // Find Monday of the currently navigated week
+  const baseDate = new Date(now);
+  baseDate.setDate(baseDate.getDate() + weekOffset * 7);
+  const dayOfWeek = baseDate.getDay(); // 0 is Sunday, 1 is Monday...
+  const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(baseDate);
+  monday.setDate(baseDate.getDate() + diffToMon);
+
+  const days = dayKeys.map((key, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const isToday = d.toDateString() === now.toDateString();
+    return {
+      key,
+      label: dayLabels[key],
+      dateNum: d.getDate(),
+      fullDate: d,
+      isToday,
+    };
+  });
+
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  const yearThai = monday.getFullYear() + 543;
+  const monthThai = thaiMonths[monday.getMonth()];
+  const weekRangeText = `${monday.getDate()} – ${friday.getDate()} ${monthThai} ${yearThai}`;
+
+  // Filtered days to display (if specific day selected, show only that day; otherwise all 5 days)
+  const displayedDays = selectedDay === 'all'
+    ? days
+    : days.filter((d) => d.key === selectedDay);
 
   const hours = [
     '08:00', '09:00', '10:00', '11:00', '12:00',
     '13:00', '14:00', '15:00', '16:00', '17:00', '18:00',
   ];
 
-  // Helper for color styles of course cards matching the screenshot's exact pastel palette
+  // Current Live Time Calculations
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const nowTotalMinutes = currentHour * 60 + currentMinute;
+  const isLiveTimeInRange = nowTotalMinutes >= 8 * 60 && nowTotalMinutes <= 18 * 60;
+  const liveTimeTopPx = ((nowTotalMinutes - 8 * 60) / 60) * 60;
+  const liveTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')} น.`;
+
+  // Dynamic "Next Class" (คาบถัดไป) Calculation
+  const todayDayIndex = now.getDay();
+  const todayKeyMap: Record<number, 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | null> = {
+    1: 'Mon',
+    2: 'Tue',
+    3: 'Wed',
+    4: 'Thu',
+    5: 'Fri',
+  };
+  const todayKey = todayKeyMap[todayDayIndex] || null;
+
+  let nextMeeting: Meeting | null = null;
+  let nextDayLabel = 'วันนี้';
+  let countdownText = '';
+
+  if (todayKey) {
+    const todayMeetings = studentMeetings
+      .filter((m) => m.day === todayKey)
+      .sort((a, b) => t2m(a.start) - t2m(b.start));
+
+    // Find next meeting today that has not ended yet
+    const upcomingToday = todayMeetings.find((m) => t2m(m.end) > nowTotalMinutes);
+    if (upcomingToday) {
+      nextMeeting = upcomingToday;
+      const startDiff = t2m(upcomingToday.start) - nowTotalMinutes;
+      if (startDiff <= 0) {
+        countdownText = 'กำลังเรียนอยู่ขณะนี้';
+      } else if (startDiff <= 60) {
+        countdownText = `อีก ${startDiff} นาที`;
+      } else {
+        countdownText = `อีก ${Math.floor(startDiff / 60)} ชม. ${startDiff % 60} นาที`;
+      }
+    }
+  }
+
+  // If no upcoming class today, find the earliest class on future days
+  if (!nextMeeting) {
+    const sorted = [...studentMeetings].sort((a, b) => {
+      const order: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
+      return order[a.day] - order[b.day] || t2m(a.start) - t2m(b.start);
+    });
+    nextMeeting = sorted[0] || null;
+    if (nextMeeting) {
+      nextDayLabel = `วัน${dayLabels[nextMeeting.day]}`;
+      countdownText = `เวลา ${nextMeeting.start} น.`;
+    }
+  }
+
+  const nextSec = nextMeeting ? getSec(nextMeeting.sectionId) : null;
+  const nextCrs = nextSec ? getCrs(nextSec.courseId) : null;
+  const nextRm = nextMeeting ? getRoom(nextMeeting.roomId) : null;
+
+  // Course Color Palette
   const getCourseStyle = (code: string) => {
     switch (code) {
       case 'CS201':
-        return {
-          bg: '#f5f3ff', // soft lavender
-          border: '#8b5cf6', // purple
-          text: '#5b21b6',
-          title: '#4c1d95',
-          sub: '#6d28d9',
-        };
+        return { bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6', title: '#4c1d95', sub: '#6d28d9' };
       case 'CS202':
-        return {
-          bg: '#eff6ff', // soft blue
-          border: '#3b82f6', // blue
-          text: '#1e40af',
-          title: '#1e3a8a',
-          sub: '#2563eb',
-        };
+        return { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af', title: '#1e3a8a', sub: '#2563eb' };
       case 'CS203':
-        return {
-          bg: '#f0fdf4', // soft green
-          border: '#10b981', // green
-          text: '#065f46',
-          title: '#064e3b',
-          sub: '#059669',
-        };
+        return { bg: '#f0fdf4', border: '#10b981', text: '#065f46', title: '#064e3b', sub: '#059669' };
       case 'MA201':
-        return {
-          bg: '#fefce8', // soft amber/yellow
-          border: '#f59e0b', // amber
-          text: '#92400e',
-          title: '#78350f',
-          sub: '#d97706',
-        };
+        return { bg: '#fefce8', border: '#f59e0b', text: '#92400e', title: '#78350f', sub: '#d97706' };
       case 'GE101':
-        return {
-          bg: '#fdf2f8', // soft pink
-          border: '#ec4899', // pink
-          text: '#9d174d',
-          title: '#831843',
-          sub: '#db2777',
-        };
+        return { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d', title: '#831843', sub: '#db2777' };
+      case 'CS204':
+        return { bg: '#e0f2fe', border: '#0284c7', text: '#0369a1', title: '#075985', sub: '#0284c7' };
+      case 'CS205':
+        return { bg: '#f3e8ff', border: '#9333ea', text: '#7e22ce', title: '#6b21a8', sub: '#9333ea' };
       default:
-        return {
-          bg: '#f8fafc',
-          border: '#94a3b8',
-          text: '#334155',
-          title: '#0f172a',
-          sub: '#64748b',
-        };
+        return { bg: '#f8fafc', border: '#94a3b8', text: '#334155', title: '#0f172a', sub: '#64748b' };
     }
   };
 
@@ -117,10 +200,10 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
       {/* Page Header */}
       <div className="view-page-header">
         <div>
-          <div className="view-kicker">พื้นที่การเรียนรู้</div>
+          <div className="view-kicker">พื้นที่การเรียนรู้ · ภาคต้น 2569</div>
           <h1 className="view-main-title">ตารางเรียนของฉัน</h1>
           <p className="view-main-sub">
-            วางแผนสัปดาห์ของคุณ ดูเวลาเรียนและห้องเรียนทั้งหมดในที่เดียว
+            วางแผนสัปดาห์ของคุณ ดูเวลาเรียนและห้องเรียนทั้งหมดในที่เดียว (ข้อมูลอัปเดตแบบเรียลไทม์)
           </p>
         </div>
         <div className="view-header-actions">
@@ -142,7 +225,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
           <div className="summary-card-content">
             <div className="summary-card-title">รายวิชาที่ลงทะเบียน</div>
             <div className="summary-card-metric">
-              <span className="metric-number">{mine.length || 5}</span>
+              <span className="metric-number">{enrolledCount}</span>
               <span className="metric-unit">รายวิชา</span>
             </div>
             <div className="summary-card-meta">
@@ -166,7 +249,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
               <span className="metric-unit">ชั่วโมง</span>
             </div>
             <div className="summary-card-meta">
-              {studentMeetings.length || 7} คาบเรียน · ไม่มีเวลาทับซ้อน
+              {studentMeetings.length} คาบเรียน · ไม่มีเวลาทับซ้อน
             </div>
           </div>
           <div className="summary-card-icon-wrap blue-light">
@@ -177,7 +260,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
           </div>
         </div>
 
-        {/* Stat Card 3: Next Class */}
+        {/* Stat Card 3: Next Class (Dynamic Real-time) */}
         <div className="summary-card next-class-card">
           <div className="next-class-left-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -189,12 +272,18 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
           </div>
           <div className="summary-card-content">
             <div className="next-class-header-row">
-              <span className="summary-card-title">คาบถัดไป · วันนี้ 09:00-11:00</span>
-              <span className="countdown-pill">อีก 15 นาที</span>
+              <span className="summary-card-title">
+                คาบถัดไป · {nextDayLabel} {nextMeeting ? `${nextMeeting.start}-${nextMeeting.end}` : ''}
+              </span>
+              {countdownText && <span className="countdown-pill">{countdownText}</span>}
             </div>
-            <div className="next-class-name">CS201 โครงสร้างข้อมูล</div>
+            <div className="next-class-name">
+              {nextCrs ? `${nextCrs.code} ${nextCrs.name}` : 'ไม่มีคาบเรียนถัดไป'}
+            </div>
             <div className="summary-card-meta">
-              กลุ่ม 01 · ห้อง SC301 · อาคารวิทยาศาสตร์
+              {nextSec && nextRm
+                ? `กลุ่ม ${nextSec.no} · ห้อง ${nextRm.name} · ${nextRm.building}`
+                : 'ไม่มีคาบเรียนที่รออยู่ในขณะนี้'}
             </div>
           </div>
         </div>
@@ -204,13 +293,48 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
       <div className="timetable-main-card">
         {/* Timetable Header Row */}
         <div className="timetable-card-topbar">
-          <h2 className="timetable-section-title">ตารางประจำสัปดาห์</h2>
+          <div className="timetable-topbar-left">
+            <h2 className="timetable-section-title">ตารางประจำสัปดาห์</h2>
+            {selectedDay !== 'all' && (
+              <span className="selected-day-tag">
+                กำลังดูเฉพาะ: วัน{dayLabels[selectedDay]}
+                <button className="btn-clear-day-filter" onClick={() => setSelectedDay('all')} title="แสดงทั้งสัปดาห์">✕</button>
+              </span>
+            )}
+          </div>
 
+          {/* Real-time Week Navigation Controls */}
           <div className="timetable-week-navigator">
-            <button className="nav-arrow-btn" title="สัปดาห์ก่อนหน้า">‹</button>
-            <span className="nav-date-range-text">16 – 20 พ.ย. 2569</span>
-            <button className="nav-arrow-btn" title="สัปดาห์ถัดไป">›</button>
-            <button className="btn-today-pill">วันนี้</button>
+            <button
+              className="nav-arrow-btn"
+              title="สัปดาห์ก่อนหน้า"
+              onClick={() => setWeekOffset((prev) => prev - 1)}
+              id="btn-prev-week"
+            >
+              ‹
+            </button>
+            <span className="nav-date-range-text" id="label-week-range">
+              {weekRangeText}
+            </span>
+            <button
+              className="nav-arrow-btn"
+              title="สัปดาห์ถัดไป"
+              onClick={() => setWeekOffset((prev) => prev + 1)}
+              id="btn-next-week"
+            >
+              ›
+            </button>
+            <button
+              className={`btn-today-pill ${weekOffset === 0 ? 'is-current' : ''}`}
+              onClick={() => {
+                setWeekOffset(0);
+                setSelectedDay('all');
+              }}
+              id="btn-goto-today"
+              title="กลับไปสัปดาห์ปัจจุบัน"
+            >
+              วันนี้
+            </button>
           </div>
 
           <div className="view-mode-toggle-group">
@@ -229,14 +353,50 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
           </div>
         </div>
 
+        {/* Interactive Day Selector Tabs (กดเลือกวันได้จริง) */}
+        <div className="timetable-day-selector-bar">
+          <span className="day-select-label">เลือกวัน:</span>
+          <button
+            className={`btn-day-tab ${selectedDay === 'all' ? 'active' : ''}`}
+            onClick={() => setSelectedDay('all')}
+            id="tab-day-all"
+          >
+            <span>📅 ทั้งสัปดาห์</span>
+          </button>
+          {days.map((d) => (
+            <button
+              key={d.key}
+              className={`btn-day-tab ${selectedDay === d.key ? 'active' : ''} ${d.isToday ? 'today-day-tab' : ''}`}
+              onClick={() => setSelectedDay(selectedDay === d.key ? 'all' : d.key)}
+              id={`tab-day-${d.key}`}
+              title={`คลิกเพื่อดูตารางเฉพาะวัน${d.label}`}
+            >
+              <span>วัน{d.label}</span>
+              <span className="tab-date-badge">{d.dateNum}</span>
+              {d.isToday && <span className="today-dot-indicator" title="วันนี้">●</span>}
+            </button>
+          ))}
+        </div>
+
         {/* Timetable View Mode: Week Grid */}
         {viewMode === 'week' ? (
           <div className="weekly-grid-outer">
-            {/* Day Header Row */}
-            <div className="weekly-grid-header-row">
+            {/* Day Header Row (Clickable headers) */}
+            <div
+              className="weekly-grid-header-row"
+              style={{
+                gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
+              }}
+            >
               <div className="grid-header-tz">GMT+7</div>
-              {days.map((d) => (
-                <div key={d.key} className={`grid-header-day ${d.isToday ? 'today-active' : ''}`}>
+              {displayedDays.map((d) => (
+                <div
+                  key={d.key}
+                  className={`grid-header-day ${d.isToday ? 'today-active' : ''} ${selectedDay === d.key ? 'selected-day-col' : ''}`}
+                  onClick={() => setSelectedDay(selectedDay === d.key ? 'all' : d.key)}
+                  title="คลิกเพื่อเลือกดูเฉพาะวันนี้ หรือกดอีกครั้งเพื่อดูทั้งสัปดาห์"
+                  style={{ cursor: 'pointer' }}
+                >
                   <span className="day-name">{d.label}</span>
                   <span className={`day-num-circle ${d.isToday ? 'today' : ''}`}>{d.dateNum}</span>
                 </div>
@@ -244,7 +404,12 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
             </div>
 
             {/* Timetable Body (Rows 08:00 to 18:00) */}
-            <div className="weekly-grid-body">
+            <div
+              className="weekly-grid-body"
+              style={{
+                gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
+              }}
+            >
               {/* Time Column */}
               <div className="grid-time-column">
                 {hours.map((h) => (
@@ -255,14 +420,31 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
               </div>
 
               {/* Day Columns */}
-              {days.map((d) => {
+              {displayedDays.map((d) => {
                 const dayMeetings = studentMeetings.filter((m) => m.day === d.key);
+                const isCurrentWeekAndToday = weekOffset === 0 && d.isToday;
+
                 return (
-                  <div key={d.key} className={`grid-day-column ${d.isToday ? 'today-col' : ''}`}>
+                  <div
+                    key={d.key}
+                    className={`grid-day-column ${d.isToday ? 'today-col' : ''} ${selectedDay === d.key ? 'selected-column' : ''}`}
+                  >
                     {/* Hour grid lines */}
                     {hours.map((h) => (
                       <div key={h} className="grid-hour-cell"></div>
                     ))}
+
+                    {/* Real-time Current Time Line Indicator */}
+                    {isCurrentWeekAndToday && isLiveTimeInRange && (
+                      <div
+                        className="live-time-indicator-line"
+                        style={{ top: `${liveTimeTopPx}px` }}
+                        title={`เวลาปัจจุบัน: ${liveTimeStr}`}
+                      >
+                        <span className="live-time-dot"></span>
+                        <span className="live-time-badge">{liveTimeStr}</span>
+                      </div>
+                    )}
 
                     {/* Render Meetings positioned by start/end times */}
                     {dayMeetings.map((m) => {
@@ -302,6 +484,12 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
                         </div>
                       );
                     })}
+
+                    {dayMeetings.length === 0 && selectedDay !== 'all' && (
+                      <div className="empty-day-state">
+                        <span>ไม่มีคาบเรียนในวันนี้</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -341,7 +529,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
 
               return (
                 <div key={m.id} className="list-view-item" style={{ borderLeft: `4px solid ${style.border}` }}>
-                  <div className="list-item-day-badge">{dayName}</div>
+                  <div className="list-item-day-badge">วัน{dayName}</div>
                   <div className="list-item-main">
                     <div className="list-item-title">
                       <b>{crs?.code}</b> {crs?.name} (กลุ่ม {sec?.no})
@@ -360,7 +548,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
         )}
       </div>
 
-      {/* Page Footer Info */}
+      {/* Page Footer Info with Real-time Clock */}
       <div className="view-page-footer">
         <div className="footer-sync-info">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -368,7 +556,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
             <polyline points="1 20 1 14 7 14"></polyline>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
           </svg>
-          <span>อัปเดตจากข้อมูลลงทะเบียนล่าสุด · วันนี้ 08:40 น.</span>
+          <span>อัปเดตแบบเรียลไทม์ · ปัจจุบัน: {now.toLocaleTimeString('th-TH')} น.</span>
         </div>
         <div className="footer-tz-info">
           เวลาเรียนทั้งหมดแสดงตามเวลาไทย (GMT+7)

@@ -41,13 +41,51 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
   const getSec = (id: string) => sections.find((s) => s.id === id);
   const getCrs = (id: string) => courses.find((c) => c.id === id);
 
-  const days: { key: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'; label: string; dateNum: number; isToday?: boolean }[] = [
-    { key: 'Mon', label: 'จันทร์', dateNum: 16, isToday: true },
-    { key: 'Tue', label: 'อังคาร', dateNum: 17 },
-    { key: 'Wed', label: 'พุธ', dateNum: 18 },
-    { key: 'Thu', label: 'พฤหัสบดี', dateNum: 19 },
-    { key: 'Fri', label: 'ศุกร์', dateNum: 20 },
+  const [weekOffset, setWeekOffset] = useState<number>(0);
+  const [selectedDay, setSelectedDay] = useState<'all' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'>('all');
+  const [now] = useState<Date>(new Date());
+
+  const thaiMonths = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
   ];
+  const dayKeys: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const dayLabels: Record<string, string> = {
+    Mon: 'จันทร์',
+    Tue: 'อังคาร',
+    Wed: 'พุธ',
+    Thu: 'พฤหัสบดี',
+    Fri: 'ศุกร์',
+  };
+
+  const baseDate = new Date(now);
+  baseDate.setDate(baseDate.getDate() + weekOffset * 7);
+  const dayOfWeek = baseDate.getDay();
+  const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(baseDate);
+  monday.setDate(baseDate.getDate() + diffToMon);
+
+  const days = dayKeys.map((key, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    const isToday = d.toDateString() === now.toDateString();
+    return {
+      key,
+      label: dayLabels[key],
+      dateNum: d.getDate(),
+      isToday,
+    };
+  });
+
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  const yearThai = monday.getFullYear() + 543;
+  const monthThai = thaiMonths[monday.getMonth()];
+  const weekRangeText = `${monday.getDate()} – ${friday.getDate()} ${monthThai} ${yearThai}`;
+
+  const displayedDays = selectedDay === 'all'
+    ? days
+    : days.filter((d) => d.key === selectedDay);
 
   const hours = [
     '08:00', '09:00', '10:00', '11:00', '12:00',
@@ -326,9 +364,31 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
           {/* Timetable Sub-bar */}
           <div className="room-schedule-control-bar">
             <div className="timetable-week-navigator">
-              <button className="nav-arrow-btn">‹</button>
-              <span className="nav-date-range-text">16 – 20 พ.ย. 2569</span>
-              <button className="nav-arrow-btn">›</button>
+              <button
+                className="nav-arrow-btn"
+                title="สัปดาห์ก่อนหน้า"
+                onClick={() => setWeekOffset((prev) => prev - 1)}
+              >
+                ‹
+              </button>
+              <span className="nav-date-range-text">{weekRangeText}</span>
+              <button
+                className="nav-arrow-btn"
+                title="สัปดาห์ถัดไป"
+                onClick={() => setWeekOffset((prev) => prev + 1)}
+              >
+                ›
+              </button>
+              <button
+                className="btn-today-pill"
+                onClick={() => {
+                  setWeekOffset(0);
+                  setSelectedDay('all');
+                }}
+                title="กลับไปสัปดาห์ปัจจุบัน"
+              >
+                วันนี้
+              </button>
             </div>
 
             <div className="room-schedule-legend">
@@ -346,10 +406,21 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
           {/* Room Weekly Grid */}
           <div className="weekly-grid-outer">
             {/* Header Row */}
-            <div className="weekly-grid-header-row">
+            <div
+              className="weekly-grid-header-row"
+              style={{
+                gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
+              }}
+            >
               <div className="grid-header-tz">GMT+7</div>
-              {days.map((d) => (
-                <div key={d.key} className={`grid-header-day ${d.isToday ? 'today-active' : ''}`}>
+              {displayedDays.map((d) => (
+                <div
+                  key={d.key}
+                  className={`grid-header-day ${d.isToday ? 'today-active' : ''} ${selectedDay === d.key ? 'selected-day-col' : ''}`}
+                  onClick={() => setSelectedDay(selectedDay === d.key ? 'all' : d.key)}
+                  title="คลิกเพื่อเลือกวัน"
+                  style={{ cursor: 'pointer' }}
+                >
                   <span className="day-name">{d.label}</span>
                   <span className={`day-num-circle ${d.isToday ? 'today' : ''}`}>{d.dateNum}</span>
                 </div>
@@ -357,7 +428,12 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
             </div>
 
             {/* Grid Body */}
-            <div className="weekly-grid-body">
+            <div
+              className="weekly-grid-body"
+              style={{
+                gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
+              }}
+            >
               {/* Time column */}
               <div className="grid-time-column">
                 {hours.map((h) => (
@@ -368,7 +444,7 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
               </div>
 
               {/* Day columns */}
-              {days.map((d) => {
+              {displayedDays.map((d) => {
                 const dayMeetings = roomMeetings.filter((m) => m.day === d.key);
                 return (
                   <div key={d.key} className={`grid-day-column ${d.isToday ? 'today-col' : ''}`}>

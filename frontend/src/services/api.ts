@@ -165,7 +165,7 @@ export async function apiFetchRooms(): Promise<Room[]> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.data && Array.isArray(json.data) && json.data.length > 0) {
-      return json.data.map((r: any) => ({
+      const apiRooms: Room[] = json.data.map((r: any) => ({
         id: r.id,
         name: r.name,
         type: r.room_type || r.type || 'ห้องบรรยาย',
@@ -178,6 +178,10 @@ export async function apiFetchRooms(): Promise<Room[]> {
           ? JSON.parse(r.features)
           : ['โปรเจกเตอร์', 'Wi-Fi'],
       }));
+      const merged = new Map<string, Room>();
+      INITIAL_ROOMS.forEach((r) => merged.set(r.id, r));
+      apiRooms.forEach((r) => merged.set(r.id, r));
+      return Array.from(merged.values());
     }
   } catch (err) {
     console.info('apiFetchRooms fallback to initial seed:', err);
@@ -203,7 +207,7 @@ export async function apiFetchMeetings(): Promise<Meeting[]> {
         Thu: 'Thu',
         Fri: 'Fri',
       };
-      return json.data.map((m: any) => ({
+      const apiMeetings: Meeting[] = json.data.map((m: any) => ({
         id: m.id,
         sectionId: m.section_id || m.sectionId,
         roomId: m.room_id || m.roomId,
@@ -211,6 +215,10 @@ export async function apiFetchMeetings(): Promise<Meeting[]> {
         start: m.start_time || m.start,
         end: m.end_time || m.end,
       }));
+      const merged = new Map<string, Meeting>();
+      INITIAL_MEETINGS.forEach((m) => merged.set(m.id, m));
+      apiMeetings.forEach((m) => merged.set(m.id, m));
+      return Array.from(merged.values());
     }
   } catch (err) {
     console.info('apiFetchMeetings fallback to initial seed:', err);
