@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Course, Meeting, Room, Section, Suggestion } from '../types';
+import { Course, Day, Meeting, Room, Section, Suggestion } from '../types';
 import { DAYS, timeOpts, t2m } from '../services/api';
 
 interface MeetingModalProps {
@@ -10,7 +10,7 @@ interface MeetingModalProps {
   courses: Course[];
   meetings: Meeting[];
   enrolledCount: (sectionId: string) => number;
-  onSave: (meetingData: { id?: string; sectionId: string; roomId: string; day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'; start: string; end: string }) => void;
+  onSave: (meetingData: { id?: string; sectionId: string; roomId: string; day: Day; start: string; end: string }) => void;
   onDelete?: (meetingId: string) => void;
   onClose: () => void;
   aiServiceOnline: boolean;
@@ -31,7 +31,7 @@ export const MeetingModal: React.FC<MeetingModalProps> = ({
   const [form, setForm] = useState({
     sectionId: meeting ? meeting.sectionId : sections[0]?.id || '',
     roomId: meeting ? meeting.roomId : preRoomId || rooms[0]?.id || '',
-    day: meeting ? meeting.day : ('Mon' as 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'),
+    day: meeting ? meeting.day : ('Mon' as Day),
     start: meeting ? meeting.start : '09:00',
     end: meeting ? meeting.end : '11:00',
   });

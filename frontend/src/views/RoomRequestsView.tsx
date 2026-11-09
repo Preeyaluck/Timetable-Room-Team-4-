@@ -73,6 +73,10 @@ export const RoomRequestsView: React.FC<RoomRequestsViewProps> = ({
         return 'พฤหัสบดี';
       case 'Fri':
         return 'ศุกร์';
+      case 'Sat':
+        return 'เสาร์';
+      case 'Sun':
+        return 'อาทิตย์';
       default:
         return day;
     }

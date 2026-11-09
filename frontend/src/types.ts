@@ -25,7 +25,7 @@ export interface Section {
   base: number;
 }
 
-export type Day = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+export type Day = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 
 export interface Meeting {
   id: string;

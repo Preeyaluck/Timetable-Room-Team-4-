@@ -6,7 +6,6 @@ interface SidebarProps {
   onViewChange: (view: string) => void;
   user: User;
   onLogout: () => void;
-  onSwitchUser?: () => void;
   pendingRequestsCount?: number;
   onOpenAiModal?: () => void;
 }
@@ -135,6 +134,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </svg>
             </span>
             <span className="nav-text">คำร้องของฉัน</span>
+            {pendingRequestsCount > 0 && (
+              <span className="nav-pending-badge">{pendingRequestsCount}</span>
+            )}
           </button>
         )}
 
@@ -212,6 +214,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {user.department || 'วิทยาการคอมพิวเตอร์'}
               </div>
               <div className="popover-divider"></div>
+
               <button
                 className="btn-popover-logout"
                 onClick={() => {

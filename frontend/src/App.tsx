@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Course,
+  Day,
   Enrollment,
   EventLog,
   Meeting,
@@ -18,6 +19,10 @@ import {
   DEMO_USERS,
   apiFetchRooms,
   apiFetchMeetings,
+  apiFetchCourses,
+  apiFetchSections,
+  apiFetchEnrollments,
+  apiSyncTeam03,
 } from './services/api';
 import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
@@ -48,30 +53,50 @@ export function App() {
   });
 
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
-  const [courses] = useState<Course[]>(INITIAL_COURSES);
-  const [sections] = useState<Section[]>(INITIAL_SECTIONS);
+  const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
+  const [sections, setSections] = useState<Section[]>(INITIAL_SECTIONS);
   const [meetings, setMeetings] = useState<Meeting[]>(INITIAL_MEETINGS);
   const [enrollments, setEnrollments] = useState<Enrollment[]>(INITIAL_ENROLLMENTS);
 
-  // Sync with live Cloudflare Worker API on mount (if available)
-  useEffect(() => {
-    let active = true;
-    Promise.all([apiFetchRooms(), apiFetchMeetings()]).then(([r, m]) => {
-      if (active) {
-        if (r && r.length > 0) setRooms(r);
-        if (m && m.length > 0) setMeetings(m);
+  // Master live data loader from Cloudflare Workers + D1 Database
+  const loadAllData = async (silentSync: boolean = false) => {
+    try {
+      if (silentSync) {
+        // Silently sync latest from Team 03 in background
+        await apiSyncTeam03().catch(() => {});
       }
-    });
-    return () => {
-      active = false;
-    };
+      const [r, m, c, s, e] = await Promise.all([
+        apiFetchRooms(),
+        apiFetchMeetings(),
+        apiFetchCourses(),
+        apiFetchSections(),
+        apiFetchEnrollments(),
+      ]);
+      if (r && r.length > 0) setRooms(r);
+      if (m && m.length > 0) setMeetings(m);
+      if (c && c.length > 0) setCourses(c);
+      if (s && s.length > 0) setSections(s);
+      if (e && e.length > 0) setEnrollments(e);
+    } catch (err) {
+      console.warn('loadAllData error:', err);
+    }
+  };
+
+  // Keep live connection with Cloudflare Workers + D1 and Team 03 continuously
+  useEffect(() => {
+    loadAllData(true);
+    // Background polling every 30 seconds to keep data continuously connected
+    const interval = setInterval(() => {
+      loadAllData(true);
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // AI Consultant Modal State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
 
-  // Student Room Requests state with all 3 statuses (pending, approved, rejected)
-  const [roomRequests, setRoomRequests] = useState<RoomRequest[]>([
+  // Student Room Requests default seed data
+  const DEFAULT_ROOM_REQUESTS: RoomRequest[] = [
     {
       id: 'req_001',
       studentId: '69010042',
@@ -102,9 +127,9 @@ export function App() {
     },
     {
       id: 'req_003',
-      studentId: '69010088',
-      studentName: 'กิตติศักดิ์ มั่งมี',
-      department: 'เทคโนโลยีสารสนเทศ',
+      studentId: '65010042',
+      studentName: 'Somchai Prasert (Team 03)',
+      department: 'Software Engineering',
       roomId: 'rm_sc301',
       day: 'Mon',
       start: '09:00',
@@ -115,7 +140,30 @@ export function App() {
       rejectReason: 'ห้อง SC301 มีคาบเรียน CS201 ประจำอยู่แล้วในวันและเวลาดังกล่าว',
       createdAt: 'เมื่อวาน 11:20 น.',
     },
-  ]);
+  ];
+
+  // Student Room Requests state with localStorage persistence
+  const [roomRequests, setRoomRequests] = useState<RoomRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem('timetable_room_requests');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_ROOM_REQUESTS;
+  });
+
+  // Keep roomRequests in sync with localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('timetable_room_requests', JSON.stringify(roomRequests));
+    } catch (err) {
+      console.warn('Failed to save roomRequests to localStorage', err);
+    }
+  }, [roomRequests]);
 
   const [requestRoomModal, setRequestRoomModal] = useState<{
     isOpen: boolean;
@@ -225,27 +273,29 @@ export function App() {
     studentId: string;
     studentName: string;
     roomId: string;
-    day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+    day: Day;
     start: string;
     end: string;
     purpose: string;
     attendees: number;
   }) => {
+    const targetRoom = rooms.find((r) => r.id === data.roomId);
     const newReq: RoomRequest = {
       id: `req_${Date.now()}`,
       ...data,
       status: 'pending',
-      createdAt: new Date().toLocaleTimeString('en-GB'),
+      createdAt: 'วันนี้ ' + new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.',
     };
     setRoomRequests((prev) => [newReq, ...prev]);
     logEvt('API', `POST /api/rooms/${data.roomId}/request`, newReq, 'Student submitted room booking request');
+    showToast(`ยื่นคำขอใช้ห้อง ${targetRoom?.name || ''} สำเร็จแล้ว เจ้าหน้าที่จะพิจารณาในไม่ช้า`, 'ok');
     setRequestRoomModal({ isOpen: false, roomId: '' });
   };
 
   // AI direct room booking request submission
   const handleAiRequestSubmit = (data: {
     roomId: string;
-    day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+    day: Day;
     start: string;
     end: string;
     purpose: string;
@@ -318,7 +368,7 @@ export function App() {
     id?: string;
     sectionId: string;
     roomId: string;
-    day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+    day: Day;
     start: string;
     end: string;
   }) => {
@@ -430,7 +480,9 @@ export function App() {
   }
 
   const isStaff = currentUser.role === 'staff';
-  const pendingRequestsCount = roomRequests.filter((r) => r.status === 'pending').length;
+  const pendingRequestsCount = isStaff
+    ? roomRequests.filter((r) => r.status === 'pending').length
+    : roomRequests.filter((r) => r.studentId === currentUser.id && r.status === 'pending').length;
   const deleteTargetMeeting = meetings.find((m) => m.id === confirmDeleteId);
 
   return (
@@ -451,6 +503,7 @@ export function App() {
           onLogout={handleLogout}
           pendingRequestsCount={pendingRequestsCount}
           roomRequests={roomRequests}
+          rooms={rooms}
           onNavigateToRequests={() => setView('requests')}
           onOpenAiModal={() => setIsAiModalOpen(true)}
         />

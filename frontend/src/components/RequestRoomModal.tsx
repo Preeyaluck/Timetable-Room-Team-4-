@@ -43,6 +43,8 @@ export const RequestRoomModal: React.FC<RequestRoomModalProps> = ({
     { key: 'Wed', label: 'วันพุธ (Wednesday)' },
     { key: 'Thu', label: 'วันพฤหัสบดี (Thursday)' },
     { key: 'Fri', label: 'วันศุกร์ (Friday)' },
+    { key: 'Sat', label: 'วันเสาร์ (Saturday)' },
+    { key: 'Sun', label: 'วันอาทิตย์ (Sunday)' },
   ];
 
   const dayThaiLabels: Record<Day, string> = {
@@ -51,6 +53,8 @@ export const RequestRoomModal: React.FC<RequestRoomModalProps> = ({
     Wed: 'พุธ',
     Thu: 'พฤหัสบดี',
     Fri: 'ศุกร์',
+    Sat: 'เสาร์',
+    Sun: 'อาทิตย์',
   };
 
   // Validation

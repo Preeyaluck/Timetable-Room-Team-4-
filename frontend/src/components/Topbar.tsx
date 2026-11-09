@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { RoomRequest, User } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { Room, RoomRequest, User } from '../types';
 
 interface TopbarProps {
   activeView: string;
@@ -7,6 +7,7 @@ interface TopbarProps {
   onLogout: () => void;
   pendingRequestsCount?: number;
   roomRequests?: RoomRequest[];
+  rooms?: Room[];
   onNavigateToRequests?: () => void;
   onOpenAiModal?: () => void;
 }
@@ -17,10 +18,27 @@ export const Topbar: React.FC<TopbarProps> = ({
   onLogout,
   pendingRequestsCount = 0,
   roomRequests = [],
+  rooms = [],
   onNavigateToRequests,
   onOpenAiModal,
 }) => {
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotificationMenu(false);
+      }
+    };
+    if (showNotificationMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotificationMenu]);
 
   const getBreadcrumbTitle = () => {
     switch (activeView) {
@@ -38,7 +56,51 @@ export const Topbar: React.FC<TopbarProps> = ({
   };
 
   const isStaff = user.role === 'staff';
-  const pendingRequests = roomRequests.filter((r) => r.status === 'pending');
+
+  const dayToThai = (day: string) => {
+    const map: Record<string, string> = {
+      Mon: 'วันจันทร์',
+      Monday: 'วันจันทร์',
+      Tue: 'วันอังคาร',
+      Tuesday: 'วันอังคาร',
+      Wed: 'วันพุธ',
+      Wednesday: 'วันพุธ',
+      Thu: 'วันพฤหัสบดี',
+      Thursday: 'วันพฤหัสบดี',
+      Fri: 'วันศุกร์',
+      Friday: 'วันศุกร์',
+      Sat: 'วันเสาร์',
+      Saturday: 'วันเสาร์',
+      Sun: 'วันอาทิตย์',
+      Sunday: 'วันอาทิตย์',
+    };
+    return map[day] || `วัน${day}`;
+  };
+
+  const getRoomName = (roomId: string) => {
+    const found = rooms.find((r) => r.id.toLowerCase() === roomId.toLowerCase());
+    if (found) return found.name;
+    return roomId.replace(/^rm_/i, '').toUpperCase();
+  };
+
+  // 1. Staff sees all requests (pending first, then others)
+  // 2. Student sees ONLY their own requests (matching studentId)
+  const myRequests = isStaff
+    ? roomRequests
+    : roomRequests.filter((r) => r.studentId === user.id);
+
+  const pendingRequests = myRequests.filter((r) => r.status === 'pending');
+
+  // Display items in dropdown:
+  // For staff: show pending requests; if no pending, show up to 3 recent requests
+  // For student: show their requests (pending, approved, rejected)
+  const displayItems = isStaff
+    ? pendingRequests.length > 0
+      ? pendingRequests
+      : myRequests.slice(0, 3)
+    : myRequests.slice(0, 5);
+
+  const displayCount = pendingRequests.length;
 
   return (
     <header className="app-topbar">
@@ -85,10 +147,10 @@ export const Topbar: React.FC<TopbarProps> = ({
         )}
 
         {/* Notification Bell with Badge */}
-        <div className="bell-container">
+        <div className="bell-container" ref={notifRef}>
           <button
             className={`topbar-bell-btn ${pendingRequestsCount > 0 ? 'has-notifications' : ''}`}
-            title={pendingRequestsCount > 0 ? `มีคำร้องใหม่ ${pendingRequestsCount} รายการ` : 'การแจ้งเตือน'}
+            title={pendingRequestsCount > 0 ? `มีการแจ้งเตือนใหม่ ${pendingRequestsCount} รายการ` : 'การแจ้งเตือน'}
             onClick={() => setShowNotificationMenu(!showNotificationMenu)}
             id="btn-notification-bell"
           >
@@ -109,44 +171,114 @@ export const Topbar: React.FC<TopbarProps> = ({
             <div className="notification-dropdown-menu">
               <div className="notif-dropdown-header">
                 <div>
-                  <div className="notif-header-title">การแจ้งเตือนคำร้อง</div>
+                  <div className="notif-header-title">
+                    {isStaff ? 'การแจ้งเตือนคำร้องขอใช้ห้อง' : 'การแจ้งเตือนคำร้องของฉัน'}
+                  </div>
                   <div className="notif-header-sub">
-                    {pendingRequestsCount > 0
-                      ? `มีคำร้องที่รอการอนุมัติ ${pendingRequestsCount} รายการ`
-                      : 'ไม่มีคำร้องค้างในขณะนี้'}
+                    {isStaff
+                      ? displayCount > 0
+                        ? `มีคำร้องที่รอการอนุมัติ ${displayCount} รายการ`
+                        : 'ไม่มีคำร้องค้างในขณะนี้'
+                      : myRequests.length > 0
+                      ? displayCount > 0
+                        ? `มีคำร้องที่รอการพิจารณา ${displayCount} รายการ`
+                        : `อัปเดตสถานะคำร้องล่าสุด (${myRequests.length} รายการ)`
+                      : 'ไม่มีการแจ้งเตือนในขณะนี้'}
                   </div>
                 </div>
-                {pendingRequestsCount > 0 && (
-                  <span className="notif-badge-amber">{pendingRequestsCount} ใหม่</span>
-                )}
+                {displayCount > 0 ? (
+                  <span className="notif-badge-amber">{displayCount} ใหม่</span>
+                ) : myRequests.length > 0 && !isStaff ? (
+                  <span className="notif-badge-green">อัปเดต</span>
+                ) : null}
               </div>
 
               <div className="notif-list-container">
-                {pendingRequests.length > 0 ? (
-                  pendingRequests.slice(0, 3).map((req) => (
-                    <div
-                      key={req.id}
-                      className="notif-item-row"
-                      onClick={() => {
-                        setShowNotificationMenu(false);
-                        if (onNavigateToRequests) onNavigateToRequests();
-                      }}
-                    >
-                      <div className="notif-item-icon">📨</div>
-                      <div className="notif-item-content">
-                        <div className="notif-item-title">
-                          <b>{req.studentName}</b> ขอใช้ห้อง
+                {displayItems.length > 0 ? (
+                  displayItems.map((req) => {
+                    const roomName = getRoomName(req.roomId);
+                    const dayThai = dayToThai(req.day);
+
+                    return (
+                      <div
+                        key={req.id}
+                        className="notif-item-row"
+                        onClick={() => {
+                          setShowNotificationMenu(false);
+                          if (onNavigateToRequests) onNavigateToRequests();
+                        }}
+                      >
+                        <div className="notif-item-icon">
+                          {req.status === 'approved' ? '🎉' : req.status === 'rejected' ? '⚠️' : '📨'}
                         </div>
-                        <div className="notif-item-details">
-                          {req.roomId.toUpperCase()} · วัน{req.day} {req.start}–{req.end} น.
+                        <div className="notif-item-content">
+                          <div className="notif-item-title">
+                            {isStaff ? (
+                              <span>
+                                <b>{req.studentName}</b> ขอใช้ห้อง <b>{roomName}</b>
+                              </span>
+                            ) : req.status === 'approved' ? (
+                              <span>
+                                คำร้องขอใช้ห้อง <b>{roomName}</b> ได้รับการอนุมัติแล้ว
+                              </span>
+                            ) : req.status === 'rejected' ? (
+                              <span>
+                                คำร้องขอใช้ห้อง <b>{roomName}</b> ไม่ได้รับการอนุมัติ
+                              </span>
+                            ) : (
+                              <span>
+                                คำร้องขอใช้ห้อง <b>{roomName}</b> (อยู่ระหว่างการพิจารณา)
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="notif-item-details">
+                            {req.status === 'rejected' && req.rejectReason ? (
+                              <span style={{ color: '#dc2626' }}>เหตุผล: {req.rejectReason}</span>
+                            ) : (
+                              <span>
+                                {roomName} · {dayThai} {req.start}–{req.end} น.
+                              </span>
+                            )}
+                            {req.createdAt && (
+                              <span style={{ marginLeft: '6px', opacity: 0.7, fontSize: '10.5px' }}>
+                                ({req.createdAt})
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            className={`notif-item-status-pill ${
+                              req.status === 'approved'
+                                ? 'approved'
+                                : req.status === 'rejected'
+                                ? 'rejected'
+                                : 'pending'
+                            }`}
+                          >
+                            {req.status === 'approved'
+                              ? '✓ อนุมัติแล้ว'
+                              : req.status === 'rejected'
+                              ? '✗ ไม่อนุมัติ'
+                              : '⏳ รอการอนุมัติ'}
+                          </div>
                         </div>
-                        <div className="notif-item-status-pill">สถานะ: ยังไม่อนุมัติ</div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="notif-empty-state">
-                    <span>✓ ตรวจสอบคำร้องทั้งหมดเรียบร้อยแล้ว</span>
+                    {isStaff ? (
+                      <span>✓ ตรวจสอบคำร้องทั้งหมดเรียบร้อยแล้ว</span>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: '24px', marginBottom: '6px' }}>📭</div>
+                        <div>ยังไม่มีประวัติคำร้องขอใช้ห้องเรียน</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                          เมื่อยื่นคำร้องขอใช้ห้อง สถานะการพิจารณาจะแจ้งเตือนที่นี่
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -166,7 +298,6 @@ export const Topbar: React.FC<TopbarProps> = ({
           )}
         </div>
 
-        {/* Changed 'สลับบัญชี' to 'Logout' */}
         <button
           className="topbar-logout-btn"
           onClick={onLogout}

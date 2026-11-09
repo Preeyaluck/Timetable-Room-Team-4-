@@ -8,6 +8,7 @@ import timetables from './routes/timetables';
 import conflicts from './routes/conflicts';
 import users from './routes/users';
 import enrollments from './routes/enrollments';
+import sync from './routes/sync';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -100,6 +101,8 @@ app.route('/api/timetables', timetables);
 app.route('/api/conflicts', conflicts);
 app.route('/api/users', users);
 app.route('/api/enrollments', enrollments);
+app.route('/api/sync', sync);
+app.route('/api/webhooks', sync);
 
 // 404 Handler - Fallback to ASSETS for SPA client routing if not an /api route
 app.notFound(async (c) => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Course, Meeting, Room, Section } from '../types';
+import { Course, Day, Meeting, Room, Section } from '../types';
 import { t2m } from '../services/api';
 import { BuildingMapModal } from '../components/BuildingMapModal';
 
@@ -29,10 +29,9 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
   onOpenAiAdvisor,
 }) => {
   const [fQ, setFQ] = useState('');
-  const [fBuilding, setFBuilding] = useState('อาคารวิทยาศาสตร์');
+  const [fBuilding, setFBuilding] = useState('all');
   const [fCap, setFCap] = useState('all');
   const [fTimeSlot, setFTimeSlot] = useState('all');
-  const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string>(() => {
     return rooms.find((r) => r.name === 'SC303')?.id || rooms[0]?.id || '';
   });
@@ -42,20 +41,22 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
   const getCrs = (id: string) => courses.find((c) => c.id === id);
 
   const [weekOffset, setWeekOffset] = useState<number>(0);
-  const [selectedDay, setSelectedDay] = useState<'all' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'>('all');
+  const [selectedDay, setSelectedDay] = useState<'all' | Day>('all');
   const [now] = useState<Date>(new Date());
 
   const thaiMonths = [
     'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
     'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
   ];
-  const dayKeys: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const dayLabels: Record<string, string> = {
+  const dayKeys: Day[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayLabels: Record<Day, string> = {
     Mon: 'จันทร์',
     Tue: 'อังคาร',
     Wed: 'พุธ',
     Thu: 'พฤหัสบดี',
     Fri: 'ศุกร์',
+    Sat: 'เสาร์',
+    Sun: 'อาทิตย์',
   };
 
   const baseDate = new Date(now);
@@ -77,11 +78,14 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
     };
   });
 
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
   const yearThai = monday.getFullYear() + 543;
   const monthThai = thaiMonths[monday.getMonth()];
-  const weekRangeText = `${monday.getDate()} – ${friday.getDate()} ${monthThai} ${yearThai}`;
+  const endMonthThai = thaiMonths[sunday.getMonth()];
+  const weekRangeText = monday.getMonth() === sunday.getMonth()
+    ? `${monday.getDate()} – ${sunday.getDate()} ${monthThai} ${yearThai}`
+    : `${monday.getDate()} ${monthThai} – ${sunday.getDate()} ${endMonthThai} ${yearThai}`;
 
   const displayedDays = selectedDay === 'all'
     ? days
@@ -127,10 +131,9 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
 
   const filteredRooms = rooms.filter((r) => {
     if (fQ && !r.name.toLowerCase().includes(fQ.toLowerCase())) return false;
-    if (fBuilding && r.building !== fBuilding) return false;
+    if (fBuilding && fBuilding !== 'all' && r.building !== fBuilding) return false;
     if (fCap === '30+' && r.capacity < 30) return false;
     if (fCap === '50+' && r.capacity < 50) return false;
-    if (onlyAvailable && isRoomOccupied(r.id)) return false;
     return true;
   });
 
@@ -145,6 +148,27 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
 
   const getEventStyle = (code: string) => {
     switch (code) {
+      case 'CS101':
+        return {
+          bg: '#f5f3ff',
+          border: '#8b5cf6',
+          title: '#4c1d95',
+          sub: '#6d28d9',
+        };
+      case 'CS301':
+        return {
+          bg: '#f0fdfa',
+          border: '#14b8a6',
+          title: '#115e59',
+          sub: '#0d9488',
+        };
+      case 'SE201':
+        return {
+          bg: '#fff7ed',
+          border: '#f97316',
+          title: '#7c2d12',
+          sub: '#ea580c',
+        };
       case 'CS203':
         return {
           bg: '#ecfdf5',
@@ -255,8 +279,12 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
         <div className="filter-select-box">
           <span className="select-icon">🏛️</span>
           <select value={fBuilding} onChange={(e) => setFBuilding(e.target.value)}>
-            <option value="อาคารวิทยาศาสตร์">อาคารวิทยาศาสตร์</option>
-            <option value="">ทุกอาคาร</option>
+            <option value="all">ทุกอาคาร ({rooms.length} ห้อง)</option>
+            {Array.from(new Set(rooms.map((r) => r.building).filter(Boolean))).map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
           </select>
           <span className="select-caret">▾</span>
         </div>
@@ -326,15 +354,6 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
             <span className="room-list-count">{filteredRooms.length} ห้อง</span>
           </div>
 
-          <label className="available-only-checkbox">
-            <input
-              type="checkbox"
-              checked={onlyAvailable}
-              onChange={(e) => setOnlyAvailable(e.target.checked)}
-            />
-            <span>แสดงเฉพาะห้องว่างในเวลาที่เลือก</span>
-          </label>
-
           <div className="room-cards-stack">
             {filteredRooms.map((r) => {
               const isOccupied = isRoomOccupied(r.id);
@@ -385,7 +404,7 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
           <div className="room-detail-header-card">
             <div className="room-header-left">
               <div className="room-avatar-box">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#881337" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                   <line x1="8" y1="21" x2="16" y2="21"></line>
                   <line x1="12" y1="17" x2="12" y2="21"></line>
@@ -450,24 +469,13 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
                 วันนี้
               </button>
             </div>
-
-            <div className="room-schedule-legend">
-              <span className="legend-occupied">
-                <span className="color-sq occupied"></span>
-                <span>มีการใช้งาน</span>
-              </span>
-              <span className="legend-vacant">
-                <span className="color-sq vacant"></span>
-                <span>ช่วงว่าง</span>
-              </span>
-            </div>
           </div>
 
           {/* Room Weekly Grid */}
           <div className="weekly-grid-outer">
             {/* Header Row */}
             <div
-              className="weekly-grid-header-row"
+              className={`weekly-grid-header-row ${displayedDays.length < 7 ? 'single-day-grid' : ''}`}
               style={{
                 gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
               }}
@@ -489,7 +497,7 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
 
             {/* Grid Body */}
             <div
-              className="weekly-grid-body"
+              className={`weekly-grid-body ${displayedDays.length < 7 ? 'single-day-grid' : ''}`}
               style={{
                 gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
               }}
@@ -507,7 +515,7 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
               {displayedDays.map((d) => {
                 const dayMeetings = roomMeetings.filter((m) => m.day === d.key);
                 return (
-                  <div key={d.key} className={`grid-day-column ${d.isToday ? 'today-col' : ''}`}>
+                  <div key={d.key} className={`grid-day-column ${d.isToday ? 'today-col' : ''} ${selectedDay === d.key ? 'selected-column' : ''}`}>
                     {hours.map((h) => (
                       <div key={h} className="grid-hour-cell"></div>
                     ))}
@@ -530,7 +538,10 @@ export const RoomSchedule: React.FC<RoomScheduleProps> = ({
                             top: `${topPx}px`,
                             height: `${heightPx - 4}px`,
                             backgroundColor: style.bg,
+                            border: `1px solid ${style.border}33`,
                             borderLeft: `4px solid ${style.border}`,
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
                             cursor: isStaff ? 'pointer' : 'default',
                           }}
                           onClick={() => isStaff && onEditMeeting(m.id)}

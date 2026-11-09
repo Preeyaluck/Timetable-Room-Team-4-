@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Meeting, Room, User } from '../types';
+import { Day, Meeting, Room, User } from '../types';
 import { overlap } from '../services/api';
 
 interface AiConsultantModalProps {
@@ -10,7 +10,7 @@ interface AiConsultantModalProps {
   meetings: Meeting[];
   onRequestWithData?: (data: {
     roomId: string;
-    day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+    day: Day;
     start: string;
     end: string;
     purpose: string;
@@ -25,7 +25,7 @@ interface ChatMessage {
   timestamp: string;
   recommendations?: {
     room: Room;
-    day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+    day: Day;
     dayThai: string;
     start: string;
     end: string;
@@ -83,7 +83,7 @@ export const AiConsultantModal: React.FC<AiConsultantModalProps> = ({
       const lower = q.toLowerCase();
 
       // 1. Detect Day
-      let day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' = 'Wed';
+      let day: Day = 'Wed';
       let dayThai = 'พุธ';
       if (lower.includes('จันทร์') || lower.includes('mon')) {
         day = 'Mon';
@@ -100,6 +100,12 @@ export const AiConsultantModal: React.FC<AiConsultantModalProps> = ({
       } else if (lower.includes('ศุกร์') || lower.includes('fri')) {
         day = 'Fri';
         dayThai = 'ศุกร์';
+      } else if (lower.includes('เสาร์') || lower.includes('sat')) {
+        day = 'Sat';
+        dayThai = 'เสาร์';
+      } else if (lower.includes('อาทิตย์') || lower.includes('sun')) {
+        day = 'Sun';
+        dayThai = 'อาทิตย์';
       }
 
       // 2. Detect Time
@@ -169,7 +175,7 @@ export const AiConsultantModal: React.FC<AiConsultantModalProps> = ({
       let aiResponseText = '';
       const recs: {
         room: Room;
-        day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+        day: Day;
         dayThai: string;
         start: string;
         end: string;
@@ -225,7 +231,7 @@ export const AiConsultantModal: React.FC<AiConsultantModalProps> = ({
 
   const handleApplyRequest = (rec: {
     room: Room;
-    day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+    day: Day;
     start: string;
     end: string;
     attendees: number;

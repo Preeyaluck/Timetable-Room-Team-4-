@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Course, Enrollment, Meeting, Room, Section, User } from '../types';
+import { Course, Day, Enrollment, Meeting, Room, Section, User } from '../types';
 import { t2m } from '../services/api';
 
 interface MyTimetableProps {
@@ -21,7 +21,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'week' | 'list'>('week');
   const [weekOffset, setWeekOffset] = useState<number>(0);
-  const [selectedDay, setSelectedDay] = useState<'all' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri'>('all');
+  const [selectedDay, setSelectedDay] = useState<'all' | Day>('all');
   const [now, setNow] = useState<Date>(new Date());
 
   // Real-time live clock ticking every 10 seconds
@@ -37,39 +37,35 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
   const getRoom = (id: string) => rooms.find((r) => r.id === id);
   const secCourse = (sectionId: string) => getCrs(getSec(sectionId)?.courseId || '');
 
-  // Student enrolled sections with reliable fallback
+  // Student enrolled sections - Strictly dynamic from D1 / Team 03
   const mySections = enrollments
     .filter((e) => e.student === user.id && e.status === 'enrolled')
     .map((e) => e.section);
 
-  const effectiveSections = mySections.length > 0
-    ? mySections
-    : ['sec_cs201_01', 'sec_cs202_01', 'sec_cs203_01', 'sec_ma201_01', 'sec_ge101_03'];
-
-  const studentMeetings = meetings.filter((m) => effectiveSections.includes(m.sectionId));
+  const studentMeetings = meetings.filter((m) => mySections.includes(m.sectionId));
 
   const mine = enrollments.filter((e) => e.student === user.id && e.status === 'enrolled');
-  const enrolledCount = mine.length > 0 ? mine.length : 5;
-  const totalCredits = mine.length > 0
-    ? mine.reduce((sum, e) => sum + (secCourse(e.section)?.credits || 3), 0)
-    : 15;
+  const enrolledCount = mine.length;
+  const totalCredits = mine.reduce((sum, e) => sum + (secCourse(e.section)?.credits || 3), 0);
 
   // Calculate total weekly hours
   const totalWeeklyMinutes = studentMeetings.reduce((acc, m) => acc + (t2m(m.end) - t2m(m.start)), 0);
-  const totalWeeklyHours = Math.round(totalWeeklyMinutes / 60) || 16;
+  const totalWeeklyHours = Math.round(totalWeeklyMinutes / 60);
 
   // Real-time Week & Day calculation
   const thaiMonths = [
     'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
     'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
   ];
-  const dayKeys: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri')[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const dayLabels: Record<string, string> = {
+  const dayKeys: Day[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayLabels: Record<Day, string> = {
     Mon: 'จันทร์',
     Tue: 'อังคาร',
     Wed: 'พุธ',
     Thu: 'พฤหัสบดี',
     Fri: 'ศุกร์',
+    Sat: 'เสาร์',
+    Sun: 'อาทิตย์',
   };
 
   // Find Monday of the currently navigated week
@@ -93,13 +89,16 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
     };
   });
 
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
   const yearThai = monday.getFullYear() + 543;
   const monthThai = thaiMonths[monday.getMonth()];
-  const weekRangeText = `${monday.getDate()} – ${friday.getDate()} ${monthThai} ${yearThai}`;
+  const endMonthThai = thaiMonths[sunday.getMonth()];
+  const weekRangeText = monday.getMonth() === sunday.getMonth()
+    ? `${monday.getDate()} – ${sunday.getDate()} ${monthThai} ${yearThai}`
+    : `${monday.getDate()} ${monthThai} – ${sunday.getDate()} ${endMonthThai} ${yearThai}`;
 
-  // Filtered days to display (if specific day selected, show only that day; otherwise all 5 days)
+  // Filtered days to display (if specific day selected, show only that day; otherwise all 7 days)
   const displayedDays = selectedDay === 'all'
     ? days
     : days.filter((d) => d.key === selectedDay);
@@ -119,12 +118,14 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
 
   // Dynamic "Next Class" (คาบถัดไป) Calculation
   const todayDayIndex = now.getDay();
-  const todayKeyMap: Record<number, 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | null> = {
+  const todayKeyMap: Record<number, Day | null> = {
+    0: 'Sun',
     1: 'Mon',
     2: 'Tue',
     3: 'Wed',
     4: 'Thu',
     5: 'Fri',
+    6: 'Sat',
   };
   const todayKey = todayKeyMap[todayDayIndex] || null;
 
@@ -155,7 +156,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
   // If no upcoming class today, find the earliest class on future days
   if (!nextMeeting) {
     const sorted = [...studentMeetings].sort((a, b) => {
-      const order: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
+      const order: Record<Day, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
       return order[a.day] - order[b.day] || t2m(a.start) - t2m(b.start);
     });
     nextMeeting = sorted[0] || null;
@@ -172,6 +173,12 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
   // Course Color Palette
   const getCourseStyle = (code: string) => {
     switch (code) {
+      case 'CS101':
+        return { bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6', title: '#4c1d95', sub: '#6d28d9' };
+      case 'CS301':
+        return { bg: '#f0fdfa', border: '#14b8a6', text: '#0f766e', title: '#115e59', sub: '#0d9488' };
+      case 'SE201':
+        return { bg: '#fff7ed', border: '#f97316', text: '#9a3412', title: '#7c2d12', sub: '#ea580c' };
       case 'CS201':
         return { bg: '#f5f3ff', border: '#8b5cf6', text: '#5b21b6', title: '#4c1d95', sub: '#6d28d9' };
       case 'CS202':
@@ -263,7 +270,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
         {/* Stat Card 3: Next Class (Dynamic Real-time) */}
         <div className="summary-card next-class-card">
           <div className="next-class-left-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#881337" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -383,7 +390,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
           <div className="weekly-grid-outer">
             {/* Day Header Row (Clickable headers) */}
             <div
-              className="weekly-grid-header-row"
+              className={`weekly-grid-header-row ${displayedDays.length < 7 ? 'single-day-grid' : ''}`}
               style={{
                 gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
               }}
@@ -405,7 +412,7 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
 
             {/* Timetable Body (Rows 08:00 to 18:00) */}
             <div
-              className="weekly-grid-body"
+              className={`weekly-grid-body ${displayedDays.length < 7 ? 'single-day-grid' : ''}`}
               style={{
                 gridTemplateColumns: `60px repeat(${displayedDays.length}, minmax(0, 1fr))`
               }}
@@ -465,7 +472,10 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
                             top: `${topPx}px`,
                             height: `${heightPx - 4}px`,
                             backgroundColor: style.bg,
+                            border: `1px solid ${style.border}33`,
                             borderLeft: `4px solid ${style.border}`,
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
                           }}
                         >
                           <div className="event-card-header" style={{ color: style.title }}>
@@ -518,32 +528,135 @@ export const MyTimetable: React.FC<MyTimetableProps> = ({
             </div>
           </div>
         ) : (
-          /* List View Mode */
+          /* List View Mode (ตารางเรียนแบบรายการ) */
           <div className="timetable-list-view">
-            {studentMeetings.map((m) => {
-              const sec = getSec(m.sectionId);
-              const crs = getCrs(sec?.courseId || '');
-              const rm = getRoom(m.roomId);
-              const dayName = days.find((d) => d.key === m.day)?.label || m.day;
-              const style = getCourseStyle(crs?.code || '');
+            {(() => {
+              const getDurationText = (start: string, end: string) => {
+                const mins = t2m(end) - t2m(start);
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                if (h > 0 && m > 0) return `${h} ชม. ${m} นาที`;
+                if (h > 0) return `${h} ชม.`;
+                return `${m} นาที`;
+              };
 
-              return (
-                <div key={m.id} className="list-view-item" style={{ borderLeft: `4px solid ${style.border}` }}>
-                  <div className="list-item-day-badge">วัน{dayName}</div>
-                  <div className="list-item-main">
-                    <div className="list-item-title">
-                      <b>{crs?.code}</b> {crs?.name} (กลุ่ม {sec?.no})
+              // Group meetings by day according to displayedDays
+              const groupedDays = displayedDays.map((d) => {
+                const dayMeetings = studentMeetings
+                  .filter((m) => m.day === d.key)
+                  .sort((a, b) => t2m(a.start) - t2m(b.start));
+                return {
+                  ...d,
+                  meetings: dayMeetings,
+                };
+              });
+
+              // When viewing 'all' days, show days that have classes; when viewing a specific day, show that day
+              const visibleDays = selectedDay === 'all'
+                ? groupedDays.filter((d) => d.meetings.length > 0)
+                : groupedDays;
+
+              if (visibleDays.length === 0 || (selectedDay !== 'all' && visibleDays[0]?.meetings.length === 0)) {
+                const targetDayLabel = selectedDay === 'all' ? 'สัปดาห์นี้' : `วัน${days.find((d) => d.key === selectedDay)?.label || ''}`;
+                return (
+                  <div className="list-empty-day-box">
+                    <div style={{ fontSize: '36px', marginBottom: '8px' }}>☕</div>
+                    <div style={{ fontWeight: 700, fontSize: '16px', color: '#0f172a', marginBottom: '6px' }}>
+                      ไม่มีคาบเรียนใน{targetDayLabel}
                     </div>
-                    <div className="list-item-meta">
-                      <span>🕒 {m.start} – {m.end}</span>
-                      <span>🏛️ {rm?.name} ({rm?.building})</span>
-                      <span>👤 {crs?.instructor || '-'}</span>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                      คุณไม่มีตารางเรียนในช่วงเวลานี้ สามารถพักผ่อนหรือทบทวนบทเรียนได้
                     </div>
+                    {selectedDay !== 'all' && (
+                      <button
+                        className="btn-action-outline"
+                        style={{ padding: '6px 16px', fontSize: '13px' }}
+                        onClick={() => setSelectedDay('all')}
+                      >
+                        ดูทุกวันทั้งสัปดาห์
+                      </button>
+                    )}
                   </div>
-                  <div className="list-item-credits">{crs?.credits} หน่วยกิต</div>
+                );
+              }
+
+              return visibleDays.map((d) => (
+                <div key={d.key} className="list-view-day-group">
+                  <div className="list-view-day-header">
+                    <div className="list-day-title-wrap">
+                      <span className="list-day-name">วัน{d.label}</span>
+                      <span className="list-day-date">
+                        · {d.dateNum} {thaiMonths[d.fullDate.getMonth()]} {d.fullDate.getFullYear() + 543}
+                      </span>
+                      {d.isToday && <span className="list-day-today-badge">วันนี้</span>}
+                    </div>
+                    <span className="list-day-count-badge">
+                      {d.meetings.length} คาบเรียน
+                    </span>
+                  </div>
+
+                  <div className="list-view-cards-container">
+                    {d.meetings.map((m) => {
+                      const sec = getSec(m.sectionId);
+                      const crs = getCrs(sec?.courseId || '');
+                      const rm = getRoom(m.roomId);
+                      const style = getCourseStyle(crs?.code || '');
+                      const duration = getDurationText(m.start, m.end);
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="list-view-card"
+                          style={{
+                            border: '1px solid #e2e8f0',
+                            borderLeft: `5px solid ${style.border}`,
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div className="list-card-time-col">
+                            <span className="list-card-time-main">
+                              <span>🕒</span>
+                              <span>{m.start} – {m.end}</span>
+                            </span>
+                            <span className="list-card-duration">({duration})</span>
+                          </div>
+
+                          <div className="list-card-content-col">
+                            <div className="list-card-title-row">
+                              <span className="list-card-code" style={{ color: style.title }}>
+                                {crs?.code}
+                              </span>
+                              <span className="list-card-name">
+                                {crs?.name}
+                              </span>
+                              <span className="list-card-sec-badge">
+                                กลุ่ม {sec?.no}
+                              </span>
+                            </div>
+
+                            <div className="list-card-meta-row">
+                              <span className="list-meta-pill">
+                                🏛️ <b>{rm?.name}</b> ({rm?.building})
+                              </span>
+                              <span className="list-meta-pill">
+                                👤 ภาควิชา/ผู้สอน: {crs?.instructor || 'ภาควิชาวิทยาการคอมพิวเตอร์'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="list-card-right-col">
+                            <span className="list-credits-badge">
+                              {crs?.credits || 3} หน่วยกิต
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              );
-            })}
+              ));
+            })()}
           </div>
         )}
       </div>

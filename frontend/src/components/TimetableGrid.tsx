@@ -1,9 +1,10 @@
 import React from 'react';
+import { Day } from '../types';
 import { DAYS, H0, H1, HH, overlap, t2m } from '../services/api';
 
 export interface GridBlock {
   id?: string;
-  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
+  day: Day;
   start: string;
   end: string;
   title: string;
@@ -21,7 +22,7 @@ interface TimetableGridProps {
 
 export const TimetableGrid: React.FC<TimetableGridProps> = ({ blocks, onBlockClick }) => {
   const d = new Date().getDay();
-  const todayIdx = d >= 1 && d <= 5 ? d - 1 : -1;
+  const todayIdx = d === 0 ? 6 : d - 1;
 
   // Lay out overlapping blocks side by side
   const preparedBlocks = blocks.map((b) => {

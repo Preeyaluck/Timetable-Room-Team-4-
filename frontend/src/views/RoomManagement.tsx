@@ -79,7 +79,16 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
     if (overlappingMeeting) {
       const otherSec = getSec(overlappingMeeting.sectionId);
       const otherCrs = getCrs(otherSec?.courseId || '');
-      const dayThai = formDay === 'Mon' ? 'วันจันทร์' : formDay === 'Tue' ? 'วันอังคาร' : formDay === 'Wed' ? 'วันพุธ' : formDay === 'Thu' ? 'วันพฤหัสบดี' : 'วันศุกร์';
+      const dayThaiMap: Record<string, string> = {
+        Mon: 'วันจันทร์',
+        Tue: 'วันอังคาร',
+        Wed: 'วันพุธ',
+        Thu: 'วันพฤหัสบดี',
+        Fri: 'วันศุกร์',
+        Sat: 'วันเสาร์',
+        Sun: 'วันอาทิตย์',
+      };
+      const dayThai = dayThaiMap[formDay] || formDay;
 
       conflicts.push({
         type: 'overlap',
@@ -251,7 +260,16 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
               const rm = getRoom(mtg?.roomId || '');
               const enrolled = enrolledCount(sec.id);
               const isSelected = sec.id === selectedSecId;
-              const dayThai = mtg?.day === 'Mon' ? 'จันทร์' : mtg?.day === 'Tue' ? 'อังคาร' : mtg?.day === 'Wed' ? 'พุธ' : mtg?.day === 'Thu' ? 'พฤหัสบดี' : mtg?.day === 'Fri' ? 'ศุกร์' : 'ยังไม่ระบุ';
+              const dayShortMap: Record<string, string> = {
+                Mon: 'จันทร์',
+                Tue: 'อังคาร',
+                Wed: 'พุธ',
+                Thu: 'พฤหัสบดี',
+                Fri: 'ศุกร์',
+                Sat: 'เสาร์',
+                Sun: 'อาทิตย์',
+              };
+              const dayThai = mtg?.day ? (dayShortMap[mtg.day] || mtg.day) : 'ยังไม่ระบุ';
 
               return (
                 <div
@@ -427,6 +445,8 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
                   <option value="Wed">พุธ</option>
                   <option value="Thu">พฤหัสบดี</option>
                   <option value="Fri">ศุกร์</option>
+                  <option value="Sat">เสาร์</option>
+                  <option value="Sun">อาทิตย์</option>
                 </select>
                 <span className="select-arrow">▾</span>
               </div>
