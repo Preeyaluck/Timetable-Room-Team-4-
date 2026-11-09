@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { Bindings, D1Database, Room } from '../types';
+import { Bindings, D1Database, Room, RoomCatalogEntry } from '../types';
 
 const rooms = new Hono<{ Bindings: Bindings }>();
 
@@ -37,7 +37,38 @@ rooms.get('/', async (c) => {
   });
 });
 
-// 2. GET /api/rooms/:id - Get a specific room
+// 2. GET /api/rooms/catalog - List every imported CSV row
+rooms.get('/catalog', async (c) => {
+  const db = getDb(c);
+  const { building_code, floor, room_id } = c.req.query();
+
+  let query = 'SELECT * FROM room_catalog WHERE 1=1';
+  const params: string[] = [];
+
+  if (building_code) {
+    query += ' AND building_code = ?';
+    params.push(building_code);
+  }
+  if (floor) {
+    query += ' AND floor = ?';
+    params.push(floor);
+  }
+  if (room_id) {
+    query += ' AND room_id = ?';
+    params.push(room_id);
+  }
+
+  query += ' ORDER BY building_code ASC, floor ASC, room_id ASC, id ASC';
+
+  const { results } = await db.prepare(query).bind(...params).all<RoomCatalogEntry>();
+  return c.json({
+    success: true,
+    count: results.length,
+    data: results
+  });
+});
+
+// 3. GET /api/rooms/:id - Get a specific room
 rooms.get('/:id', async (c) => {
   const db = getDb(c);
   const id = c.req.param('id');

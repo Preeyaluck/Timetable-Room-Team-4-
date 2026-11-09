@@ -41,6 +41,18 @@ export interface Room {
   created_at?: string;
 }
 
+export interface RoomCatalogEntry {
+  id: number;
+  room_id: string;
+  building_name: string;
+  building_code: string;
+  zone?: string | null;
+  floor: string;
+  capacity: number;
+  capacity_source?: string | null;
+  created_at?: string;
+}
+
 export interface Course {
   id: string;
   course_code: string;

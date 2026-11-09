@@ -35,6 +35,7 @@ app.get('/api', (c) => {
     endpoints: {
       rooms: {
         list: 'GET /api/rooms',
+        catalog: 'GET /api/rooms/catalog',
         detail: 'GET /api/rooms/:id',
         schedule: 'GET /api/rooms/:id/schedule',
         create: 'POST /api/rooms',
