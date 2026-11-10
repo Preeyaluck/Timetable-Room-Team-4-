@@ -16,7 +16,6 @@ import {
   INITIAL_MEETINGS,
   INITIAL_ROOMS,
   INITIAL_SECTIONS,
-  DEMO_USERS,
   apiFetchRooms,
   apiFetchMeetings,
   apiFetchCourses,
@@ -37,7 +36,7 @@ import { RequestRoomModal } from './components/RequestRoomModal';
 import { AiConsultantModal } from './components/AiConsultantModal';
 
 export function App() {
-  // Load saved user or default to ณัฐวุฒิ ใจดี (69010042)
+  // Load saved user from localStorage, or null for first-time login
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem('timetable_current_user');
@@ -45,12 +44,77 @@ export function App() {
     } catch {
       // ignore
     }
-    return DEMO_USERS['69010042'] || null;
+    return null;
   });
 
-  const [view, setView] = useState<string>(() => {
-    return currentUser?.role === 'staff' ? 'manage' : 'timetable';
-  });
+  // Helper to determine initial view
+  const getInitialView = (user: User | null): string => {
+    if (!user) return 'timetable';
+    const validViews = user.role === 'staff'
+      ? ['rooms', 'manage', 'requests', 'events']
+      : ['timetable', 'rooms', 'requests'];
+
+    // Check hash first (e.g. #/rooms)
+    const hash = window.location.hash.replace(/^#\/?/, '').trim();
+    if (hash && validViews.includes(hash)) {
+      return hash;
+    }
+
+    // Check localStorage
+    try {
+      const savedView = localStorage.getItem('timetable_active_view');
+      if (savedView && validViews.includes(savedView)) {
+        return savedView;
+      }
+    } catch {
+      // ignore
+    }
+
+    return user.role === 'staff' ? 'manage' : 'timetable';
+  };
+
+  const [view, setView] = useState<string>(() => getInitialView(currentUser));
+
+  const handleViewChange = (newView: string) => {
+    setView(newView);
+    try {
+      localStorage.setItem('timetable_active_view', newView);
+      window.location.hash = `#/${newView}`;
+    } catch {
+      // ignore
+    }
+  };
+
+  // Sync view when user clicks browser back/forward buttons
+  useEffect(() => {
+    const onHashChange = () => {
+      if (!currentUser) return;
+      const hash = window.location.hash.replace(/^#\/?/, '').trim();
+      const validViews = currentUser.role === 'staff'
+        ? ['rooms', 'manage', 'requests', 'events']
+        : ['timetable', 'rooms', 'requests'];
+      if (hash && validViews.includes(hash) && hash !== view) {
+        setView(hash);
+        try {
+          localStorage.setItem('timetable_active_view', hash);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [currentUser, view]);
+
+  // Keep hash in sync with view
+  useEffect(() => {
+    if (currentUser) {
+      const currentHash = window.location.hash.replace(/^#\/?/, '').trim();
+      if (currentHash !== view) {
+        window.location.hash = `#/${view}`;
+      }
+    }
+  }, [currentUser, view]);
 
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
@@ -63,7 +127,7 @@ export function App() {
     try {
       if (silentSync) {
         // Silently sync latest from Team 03 in background
-        await apiSyncTeam03().catch(() => {});
+        await apiSyncTeam03().catch(() => { });
       }
       const [r, m, c, s, e] = await Promise.all([
         apiFetchRooms(),
@@ -199,11 +263,8 @@ export function App() {
     } catch {
       // ignore
     }
-    if (user.role === 'staff') {
-      setView('manage');
-    } else {
-      setView('timetable');
-    }
+    const defaultView = user.role === 'staff' ? 'manage' : 'timetable';
+    handleViewChange(defaultView);
     showToast(`Welcome, ${user.name}! (${user.role.toUpperCase()})`, 'ok');
   };
 
@@ -211,6 +272,8 @@ export function App() {
     setCurrentUser(null);
     try {
       localStorage.removeItem('timetable_current_user');
+      localStorage.removeItem('timetable_active_view');
+      window.location.hash = '';
     } catch {
       // ignore
     }
@@ -354,10 +417,10 @@ export function App() {
       prev.map((r) =>
         r.id === requestId
           ? {
-              ...r,
-              status: 'rejected',
-              rejectReason: reason || 'ไม่สามารถจัดสรรห้องได้ตามช่วงเวลาที่ขอ',
-            }
+            ...r,
+            status: 'rejected',
+            rejectReason: reason || 'ไม่สามารถจัดสรรห้องได้ตามช่วงเวลาที่ขอ',
+          }
           : r
       )
     );
@@ -451,14 +514,14 @@ export function App() {
       'enrollment.changed',
       event,
       `upsert OK · ${secLabel(event.section_id)} count ${before} → ${after}` +
-        (overMeetings.length
-          ? ` · ⚠ over capacity in ${overMeetings.map((m) => getRoom(m.roomId)?.name).join(', ')}`
-          : '')
+      (overMeetings.length
+        ? ` · ⚠ over capacity in ${overMeetings.map((m) => getRoom(m.roomId)?.name).join(', ')}`
+        : '')
     );
 
     showToast(
       `Processed · ${secLabel(event.section_id)} now ${after}` +
-        (overMeetings.length ? ' · capacity conflict!' : ''),
+      (overMeetings.length ? ' · capacity conflict!' : ''),
       overMeetings.length ? 'bad' : 'ok'
     );
   };
@@ -489,7 +552,7 @@ export function App() {
     <div className="app-shell">
       <Sidebar
         activeView={view}
-        onViewChange={setView}
+        onViewChange={handleViewChange}
         user={currentUser}
         onLogout={handleLogout}
         pendingRequestsCount={pendingRequestsCount}
@@ -504,7 +567,7 @@ export function App() {
           pendingRequestsCount={pendingRequestsCount}
           roomRequests={roomRequests}
           rooms={rooms}
-          onNavigateToRequests={() => setView('requests')}
+          onNavigateToRequests={() => handleViewChange('requests')}
           onOpenAiModal={() => setIsAiModalOpen(true)}
         />
 
@@ -546,7 +609,7 @@ export function App() {
           {isStaff && view === 'manage' && (
             <RoomManagement
               isStaff={true}
-              onSwitchToStaff={() => {}}
+              onSwitchToStaff={() => { }}
               meetings={meetings}
               rooms={rooms}
               sections={sections}
