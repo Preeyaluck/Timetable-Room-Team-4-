@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Context, Hono } from 'hono';
 import { Bindings, D1Database } from '../types';
 
 const sync = new Hono<{ Bindings: Bindings }>();
@@ -358,13 +358,13 @@ sync.post('/webhooks/incoming', async (c) => {
   return handleWebhook(c);
 });
 
-async function handleWebhook(c: any) {
+async function handleWebhook(c: Context<{ Bindings: Bindings }>) {
   const secretHeader = c.req.header('X-Webhook-Secret');
   if (secretHeader && secretHeader !== WEBHOOK_SECRET) {
     return c.json({ success: false, error: 'Unauthorized webhook secret' }, 401);
   }
 
-  const payload = await c.req.json<any>();
+  const payload: any = await c.req.json();
   const db = getDb(c);
 
   const studentCode = String(payload.student_code || payload.student_id || '').trim();

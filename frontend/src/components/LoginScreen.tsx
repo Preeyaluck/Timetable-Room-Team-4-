@@ -9,11 +9,14 @@ interface LoginScreenProps {
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [roleTab, setRoleTab] = useState<'student' | 'staff'>('student');
   const [inputId, setInputId] = useState<string>('69010042');
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
   const handleTabChange = (tab: 'student' | 'staff') => {
     setRoleTab(tab);
     setError('');
+    setPassword('');
     if (tab === 'student') {
       setInputId('69010042');
     } else {
@@ -24,11 +27,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const id = inputId.trim();
+    const pwd = password.trim();
+
     if (!id) {
       setError(roleTab === 'student' ? 'กรุณากรอกรหัสนักศึกษา' : 'กรุณากรอกรหัสเจ้าหน้าที่');
       return;
     }
 
+    if (!pwd) {
+      setError('กรุณากรอกรหัสผ่านเพื่อยืนยันตัวตนตามมาตรการ PDPA');
+      return;
+    }
+
+    if (pwd.length < 4) {
+      setError('รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
+      return;
+    }
+
+    // Role-specific authentication
     if (roleTab === 'student') {
       // Look up student from database / store
       if (DEMO_USERS[id] && DEMO_USERS[id].role === 'student') {
@@ -153,11 +169,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   สิทธิ์นักศึกษา (Student Access)
                 </span>
                 <p style={{ margin: '8px 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                  กรอกรหัสนักศึกษาของคุณเพื่อดูตารางเรียนส่วนตัวและยื่นคำขอใช้ห้องเรียน
+                  กรอกรหัสนักศึกษาและรหัสผ่านเพื่อเข้าดูตารางเรียนส่วนตัวอย่างปลอดภัย
                 </p>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '20px' }}>
+              <div className="form-group" style={{ marginBottom: '16px' }}>
                 <label className="form-label">รหัสนักศึกษา (Student ID)</label>
                 <input
                   type="text"
@@ -180,11 +196,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                   สิทธิ์เจ้าหน้าที่ (Staff Authority)
                 </span>
                 <p style={{ margin: '8px 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                  กรอกรหัสเจ้าหน้าที่เพื่อเข้าใช้งานสตูดิโอจัดสรรห้องเรียนและพิจารณาคำร้อง
+                  กรอกรหัสเจ้าหน้าที่และรหัสผ่านเพื่อเข้าใช้งานสตูดิโอจัดสรรห้องเรียน
                 </p>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '20px' }}>
+              <div className="form-group" style={{ marginBottom: '16px' }}>
                 <label className="form-label">รหัสเจ้าหน้าที่ (Staff ID)</label>
                 <input
                   type="text"
@@ -201,6 +217,87 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               </div>
             </div>
           )}
+
+          {/* Password Input Field (PDPA / Security Enhancement) */}
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label className="form-label" style={{ margin: 0 }}>รหัสผ่าน (Password)</label>
+              <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                🔒 ป้องกันข้อมูลตาม PDPA
+              </span>
+            </div>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="กรอกรหัสผ่าน (เช่น 1234)"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError('');
+                }}
+                id="input-password"
+                style={{ paddingRight: '40px', width: '100%' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  color: '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+              >
+                {showPassword ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                )}
+              </button>
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: '11.5px', color: '#64748b' }}>
+              💡 รหัสผ่านเริ่มต้นสำหรับทดสอบ: <code style={{ color: '#0f766e', fontWeight: 600, background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>1234</code>
+            </p>
+          </div>
+
+          {/* PDPA Notice Card */}
+          <div
+            style={{
+              padding: '10px 12px',
+              backgroundColor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              marginBottom: '18px',
+              fontSize: '11.5px',
+              color: '#475569',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              lineHeight: '1.45',
+            }}
+          >
+            <span style={{ fontSize: '15px', lineHeight: 1 }}>🛡️</span>
+            <div>
+              <strong style={{ color: '#1e293b' }}>มาตรการรักษาความปลอดภัยข้อมูล (PDPA)</strong>
+              <p style={{ margin: '2px 0 0', color: '#64748b' }}>
+                ระบบกำหนดให้ยืนยันตัวตนด้วยรหัสผ่าน เพื่อป้องกันการเข้าถึงและแก้ไขข้อมูลตารางเรียนส่วนบุคคลโดยไม่ได้รับอนุญาต
+              </p>
+            </div>
+          </div>
 
           {error && (
             <div
